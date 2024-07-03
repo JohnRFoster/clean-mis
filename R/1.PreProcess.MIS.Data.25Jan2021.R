@@ -9,15 +9,17 @@ rm(list = ls())
 #.rs.restartR()
 gc()
 
-#----Set Working Dir----
-setwd("C:/DATA/MIS/PigData/Mar2021/")
+#---- read path ----
+read.path <- "data/raw"
 
-write.path<-"C:/DATA/MIS/PigData/Dec2020/"
-
+#---- write path ----
+write.path <- "data/processed"
 
 #----Load Libraries----
 library(reshape2)
+library(readr)
 library(tidyr)
+library(dplyr)
 library(plyr)
 library(modeest)
 library(operators)
@@ -25,47 +27,58 @@ library(utils)
 library(anytime)
 
 #----Required Functions
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.aerial.chronology.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.Misc.Utilities.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.Pre.Process.R")
+source("R/FNC.MIS.calc.aerial.chronology.R")
+source("R/FNC.Misc.Utilities.R")
+source("R/FNC.MIS.Pre.Process.R")
 
 
 #----Prep Data ----
 
 #--Property Data
-file.name<-"PropertyMar2021b.csv"
+csv.name <- "fs_national_take_by_property_01JUL2024.csv"
+file.name <- file.path(read.path, csv.name)
+df <- read_csv(file.name)
+dat.Agr.take <- df |>
+  distinct() |>
+  select(-PRPS_QTY) |>
+  mutate(AGRPROP_ID = WT_AGRPROP_ID)
 
-dat.Agr<-read.csv(file.name,stringsAsFactors=FALSE)
-dat.Agr<-unique(dat.Agr)
+csv.name <- "fs_national_property_01JUL2024.csv"
+file.name <- file.path(read.path, csv.name)
+df <- read_csv(file.name)
+dat.Agr.property <- df |>
+  distinct() |>
+  group_by(AGRP_PRP_ID, ALWS_AGRPROP_ID, ALWS_DA_ID, PRP_NAME, ST_NAME, ST_GSA_STATE_CD, CNTY_NAME, CNTY_GSA_CNTY_CD, PRPS_PROP_TYPE) |>
+  filter(PRPS_QTY == max(PRPS_QTY)) |> # Assume max PRPS_QTY is property size
+  ungroup() |>
+  mutate(AGRPROP_ID = ALWS_AGRPROP_ID)
 
-#--Assume max PRPS_QTY is property size
-dat.Agr<-aggregate(PRPS_QTY ~ AGRP_PRP_ID+ALWS_AGRPROP_ID+ALWS_DA_ID+PRP_NAME+ST_NAME+ST_GSA_STATE_CD+CNTY_NAME+CNTY_GSA_CNTY_CD+PRPS_PROP_TYPE+DA_NAME, data=dat.Agr, FUN=max)
+dat.Agr <- left_join(dat.Agr.take, dat.Agr.property)
 
 #--Add combined id for convience
 #dat.Agr$unk.id <- paste0(dat.Agr$AGRP_PRP_ID,".",dat.Agr$ALWS_AGRPROP_ID,".",dat.Agr$ALWS_DA_ID)
 
 #dat.Agr<-dat.Agr[dat.Agr$DA_NAME=="SWINE, FERAL",]
 
-dat.Agr<-dat.Agr[complete.cases(dat.Agr$ST_GSA_STATE_CD),]
+dat.Agr2 <- dat.Agr[complete.cases(dat.Agr$ST_GSA_STATE_CD),]
 
-dat.Agr<-alter.columns(dat.Agr)
+dat.Agr3 <- alter.columns(dat.Agr2)
 
-#Assign 
-spc.lut<-read.csv("C:/DATA/MIS/PigData/species.look.up.csv",stringsAsFactors=FALSE)
+#Assign
+# spc.lut <- read_csv("C:/DATA/MIS/PigData/species.look.up.csv")
+#
+# tmp<-merge(dat.Agr, spc.lut, by.x="DA_NAME", by.y="species", all.x=TRUE)
+#
+# colnames(tmp)[ncol(tmp)] <- "DA_NAME_TYPE"
+#
+# write.csv(tmp, paste0(write.path,"processed.trapping.",file.name))
 
-tmp<-merge(dat.Agr, spc.lut, by.x="DA_NAME", by.y="species", all.x=TRUE)
-
-colnames(tmp)[ncol(tmp)] <- "DA_NAME_TYPE"
-
-write.csv(tmp, paste0(write.path,"processed.trapping.",file.name))
-
-
-dat.Agr<-dat.Agr[dat.Agr$DA_NAME=="SWINE, FERAL",]
 
 write.csv(tmp, paste0(write.path,"processed.",file.name))
 
 #--Make property lut
-lut.property.acres<-make.property.lut(dat.Agr)
+dat.Agr4 <- dat.Agr3[dat.Agr3$DA_NAME=="SWINE, FERAL",]
+lut.property.acres <- make.property.lut(dat.Agr4)
 
 write.csv(lut.property.acres, paste0(write.path,"processed.lut.property.acres.csv"))
 
