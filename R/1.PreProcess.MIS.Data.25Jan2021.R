@@ -3,6 +3,7 @@
 #
 # Preprocess MIS Data
 #
+# Ryan Miller, John Foster
 #------------------------
 
 rm(list = ls())
@@ -14,6 +15,7 @@ read.path <- "data/raw"
 
 #---- write path ----
 write.path <- "data/processed"
+processed <- "processed_"
 
 #----Load Libraries----
 library(reshape2)
@@ -31,11 +33,13 @@ source("R/FNC.MIS.calc.aerial.chronology.R")
 source("R/FNC.Misc.Utilities.R")
 source("R/FNC.MIS.Pre.Process.R")
 
+#----get correct data pull----
+pull.date <- config::get("pull.date")
 
 #----Prep Data ----
 
 #--Property Data
-csv.name <- "fs_national_take_by_property_01JUL2024.csv"
+csv.name<-paste0("fs_national_take_by_property_", pull.date, ".csv")
 file.name <- file.path(read.path, csv.name)
 df <- read_csv(file.name)
 dat.Agr.take <- df |>
@@ -43,7 +47,7 @@ dat.Agr.take <- df |>
   select(-PRPS_QTY) |>
   mutate(AGRPROP_ID = WT_AGRPROP_ID)
 
-csv.name <- "fs_national_property_01JUL2024.csv"
+csv.name<-paste0("fs_national_property_", pull.date, ".csv")
 file.name <- file.path(read.path, csv.name)
 df <- read_csv(file.name)
 dat.Agr.property <- df |>
@@ -65,75 +69,68 @@ dat.Agr2 <- dat.Agr[complete.cases(dat.Agr$ST_GSA_STATE_CD),]
 dat.Agr3 <- alter.columns(dat.Agr2)
 
 #Assign
-# spc.lut <- read_csv("C:/DATA/MIS/PigData/species.look.up.csv")
-#
-# tmp<-merge(dat.Agr, spc.lut, by.x="DA_NAME", by.y="species", all.x=TRUE)
-#
-# colnames(tmp)[ncol(tmp)] <- "DA_NAME_TYPE"
-#
-# write.csv(tmp, paste0(write.path,"processed.trapping.",file.name))
+csv.name <- "species.look.up.csv"
+spc.lut <- read_csv(file.path("data", csv.name))
 
+tmp <- merge(dat.Agr3, spc.lut, by.x = "DA_NAME", by.y = "species", all.x = TRUE)
 
-write.csv(tmp, paste0(write.path,"processed.",file.name))
+colnames(tmp)[ncol(tmp)] <- "DA_NAME_TYPE"
+
+file.name<-paste0("fs_national_property_", pull.date, ".csv")
+out.name <- paste0(processed, file.name)
+write_csv(tmp, file.path(write.path, out.name))
 
 #--Make property lut
 dat.Agr4 <- dat.Agr3[dat.Agr3$DA_NAME=="SWINE, FERAL",]
 lut.property.acres <- make.property.lut(dat.Agr4)
-
-write.csv(lut.property.acres, paste0(write.path,"processed.lut.property.acres.csv"))
-
-
-
-
+lut.property.acres <- lut.property.acres[lut.property.acres$TOTAL.LAND > 0, ]
+out.name <- paste0(processed, "lut_property_acres.csv")
+write_csv(lut.property.acres, file.path(write.path, out.name))
 
 #--Take Data
-file.name<-"PigTakePropMeth16Dec2020.csv"
-
-dat.Kill<-read.csv(file.name,stringsAsFactors=FALSE)
-dat.Kill<-unique(dat.Kill)
+csv.name<-paste0("fs_national_take_by_method_", pull.date, ".csv")
+file.name <- file.path(read.path, csv.name)
+dat.Kill<-read_csv(file.name)
+dat.Kill<-distinct(dat.Kill)
+dat.Kill<-dplyr::rename(dat.Kill, ALWS_AGRPROP_ID = WT_AGRPROP_ID)
 
 # Convert Dates to R Dates
 dat.Kill$WT_WORK_DATE <- as.Date(dat.Kill$WT_WORK_DATE,"%d-%b-%y")
-
-write.csv(dat.Kill, paste0(write.path,"processed.",file.name))
+out.name <- paste0(processed, csv.name)
+write_csv(dat.Kill, file.path(write.path, out.name))
 
 
 
 
 #--Effort
-file.name<-"Effort16Dec2020.csv"
+file.name<-paste0("fs_national_effort_", pull.date, ".csv")
 
-dat.Eff<-read.csv(file.name,stringsAsFactors=FALSE)
-dat.Eff<-unique(dat.Eff)
-
+dat.Eff<-read_csv(file.path(read.path, file.name))
+dat.Eff<-distinct(dat.Eff)
+dat.Eff<-dplyr::rename(dat.Eff, ALWS_AGRPROP_ID = WT_AGRPROP_ID)
 dat.Eff<-alter.column.names(dat.Eff)
 
 # Convert Dates to R Dates
 dat.Eff$WT_WORK_DATE <- as.Date(dat.Eff$WT_WORK_DATE,"%d-%b-%y")
-
-write.csv(dat.Eff, paste0(write.path,"processed.",file.name))
-
+out.name <- paste0(processed, file.name)
+write_csv(dat.Eff, file.path(write.path, out.name))
 
 
 
 #--Take by Property
-file.name<-"PigTakeByProperty16Dec2020.csv"
+file.name<-paste0("fs_national_take_by_property_", pull.date, ".csv")
 
-dat.PropKill<-read.csv(file.name,stringsAsFactors=FALSE)
-dat.PropKill<-unique(dat.PropKill)
+dat.PropKill<-read_csv(file.path(read.path, file.name))
+dat.PropKill<-distinct(dat.PropKill)
+dat.PropKill<-dplyr::rename(dat.PropKill, ALWS_AGRPROP_ID = WT_AGRPROP_ID)
 
 # Convert Dates to R Dates
 dat.PropKill$WT_WORK_DATE <- as.Date(as.character(dat.PropKill$WT_WORK_DATE),"%d-%b-%y")
-
-write.csv(dat.PropKill, paste0(write.path,"processed.",file.name))
+out.name <- paste0(processed, file.name)
+write_csv(dat.PropKill, file.path(write.path, out.name))
 
 
 ##----END DATA PREP----
-
-
-
-
-new.kill<-read.csv(paste0("C:/DATA/MIS/PigData/Mar2021/KillEffortMar2021.csv"),stringsAsFactors=FALSE)
 
 
 
