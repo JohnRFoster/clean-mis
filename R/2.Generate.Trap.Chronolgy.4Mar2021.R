@@ -4,56 +4,46 @@
 #
 # BETA Version
 #
-# Ryan Miller
+# Ryan Miller, John Foster
 #----------------------------------
 
-rm(list=ls()) 
-
-#----Set Working Dir----
-setwd("C:/DATA/MIS/PigData/Dec2020")
-
+rm(list=ls())
+gc()
 
 #----Set Write Paths----
-write.path<-"C:/Documents/Manuscripts/Feral Swine - MIS Data Description/Data/"
+write.path<-"data/processed"
 
+#----get correct data pull----
+pull.date <- config::get("pull.date")
 
 #----Load Libraries----
 library(reshape2)
 library(tidyr)
-library(plyr)
+library(readr)
 library(modeest)
+library(plyr)
+library(dplyr)
 library(operators)
 
 #----Simple Functions
 `%not in%` <- function (x, table) is.na(match(x, table, nomatch=NA_integer_))
 
 #----Required Functions
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.Pre.Process.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.trap.effort.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.days.elapsed.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.trap.chronology.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.Misc.Utilities.R")
-
-
-
+source("R/FNC.MIS.Pre.Process.R")
+source("R/FNC.MIS.calc.trap.effort.R")
+source("R/FNC.MIS.calc.days.elapsed.R")
+source("R/FNC.MIS.calc.trap.chronology.R")
+source("R/FNC.Misc.Utilities.R")
+source("R/FNC.MIS.assign.orphen.events.R")
 
 #----Prep Data ----
 
 # Read data
-dat.Agr<-read.csv("processed.trapping.PropertyMar2021b.csv",stringsAsFactors=FALSE)
-
-dat.Kill<-read.csv("processed.PigTakePropMeth16Dec2020.csv",stringsAsFactors=FALSE)
-
-dat.Eff<-read.csv("processed.Effort16Dec2020.csv",stringsAsFactors=FALSE)
-
-dat.PropKill<-read.csv("processed.PigTakeByProperty16Dec2020.csv",stringsAsFactors=FALSE)
-
-lut.property.acres<-read.csv("processed.lut.property.acres.csv",stringsAsFactors=FALSE)
-
-# Convert Dates to R Dates
-dat.Kill$WT_WORK_DATE <- as.Date(as.character(dat.Kill$WT_WORK_DATE),"%Y-%m-%d")
-dat.Eff$WT_WORK_DATE <- as.Date(as.character(dat.Eff$WT_WORK_DATE),"%Y-%m-%d")
-dat.PropKill$WT_WORK_DATE <- as.Date(as.character(dat.PropKill$WT_WORK_DATE),"%Y-%m-%d")
+dat.Agr <- read_csv(file.path(write.path, paste0("processed_fs_national_property_", pull.date, ".csv")))
+dat.Kill <- read_csv(file.path(write.path, paste0("processed_fs_national_take_by_method_", pull.date, ".csv")))
+dat.Eff <- read_csv(file.path(write.path, paste0("processed_fs_national_effort_", pull.date, ".csv")))
+dat.PropKill <- read_csv(file.path(write.path, paste0("processed_fs_national_take_by_property_", pull.date, ".csv")))
+lut.property.acres <- read_csv(file.path(write.path, "processed_lut_property_acres.csv"))
 
 # Restrict to properties to those with feral swine and exclude potential bias in trapping
 dat.Agr<-dat.Agr[dat.Agr$DA_NAME_TYPE %!in% c("small mammal","rodent"),]
@@ -106,18 +96,32 @@ trap.dat<-trap.dat[trap.dat$CMP_NAME %in% trap.vec,]
 
 corral.max <- max(trap.dat[trap.dat$CMP_NAME=="TRAPS, CORRAL","WTCM_QTY"])
 
-trap.dat <- trap.dat[trap.dat$WTCM_QTY < corral.max, ] 
+trap.dat <- trap.dat[trap.dat$WTCM_QTY < corral.max, ]
+
+# trap.dat |>
+#   filter(CMP_NAME == "TRAPS, LIVE, FERAL HOGS") |>
+#   pull(WTCM_QTY) |>
+#   hist(breaks=1000, main="CMP_NAME == TRAPS, LIVE, FERAL HOGS", xlab="WTCM_QTY")
+# trap.dat |>
+#   filter(CMP_NAME == "TRAPS, CAGE") |>
+#   pull(WTCM_QTY) |>
+#   hist(breaks=1000, main="CMP_NAME == TRAPS, CAGE", xlab="WTCM_QTY")
+# trap.dat |>
+#   filter(CMP_NAME == "TRAPS, CORRAL") |>
+#   pull(WTCM_QTY) |>
+#   hist(breaks=1000, main="CMP_NAME == TRAPS, CORRAL", xlab="WTCM_QTY")
+
 
 #Convert all trap types to the same type
 trap.dat[,"CMP_NAME"] <- "TRAPS, CAGE"
 
+# trap.dat |>
+#   filter(CMP_NAME == "TRAPS, CAGE") |>
+#   pull(WTCM_QTY) |>
+#   hist(breaks=1000, main="ALL TRAPS", xlab="WTCM_QTY")
 
 
 
-
-hist(trap.dat[trap.dat$CMP_NAME=="TRAPS, LIVE, FERAL HOGS","WTCM_QTY"], breaks=1000, main="CMP_NAME == TRAPS, LIVE, FERAL HOGS", xlab="WTCM_QTY")
-hist(trap.dat[trap.dat$CMP_NAME=="TRAPS, CAGE","WTCM_QTY"], breaks=1000, main="CMP_NAME == TRAPS, CAGE", xlab="WTCM_QTY")
-hist(trap.dat[trap.dat$CMP_NAME=="TRAPS, CORRAL","WTCM_QTY"], breaks=1000, main="CMP_NAME == TRAPS, CORRAL", xlab="WTCM_QTY")
 
 
 
@@ -153,36 +157,23 @@ date.lut <- calc.event.length(trap.harvest.chronology)
 ##----END----
 
 
-
-##----REMOVE Unreliable Data
-#poor.dat <- date.lut[date.lut$information.quaility<0.05,c("AGRP_PRP_ID","event.id")]
-#poor.dat$Drop.Flag <- 1
-#trap.harvest.chronology<-merge(trap.harvest.chronology,poor.dat,by=c("AGRP_PRP_ID","event.id"),all.x=TRUE)
-
-#trap.harvest.chronology<-trap.harvest.chronology[is.na(trap.harvest.chronology$Drop.Flag),]
-#trap.harvest.chronology<-trap.harvest.chronology[,-ncol(trap.harvest.chronology)]
-#----END----
-
-
-
-
 #----Assign Unassigned Orphens events trap nights----
-cnt.1<-count(trap.harvest.chronology[,c("AGRP_PRP_ID","unk.prp.event.id","ALWS_AGRPROP_ID")])
+cnt.1<-plyr::count(trap.harvest.chronology[,c("AGRP_PRP_ID","unk.prp.event.id","ALWS_AGRPROP_ID")])
 cnt.1[cnt.1$freq==1,"Orphen.Flag"] <- "Orphen"
 cnt.1<-cnt.1[,c("AGRP_PRP_ID","unk.prp.event.id","ALWS_AGRPROP_ID","Orphen.Flag")]
 cnt.1[is.na(cnt.1$Orphen.Flag),"Orphen.Flag"]<-"Not Orphen"
-count(cnt.1$Orphen.Flag)
+plyr::count(cnt.1$Orphen.Flag)
 #count(cnt.1[,c("AGRP_PRP_ID","Orphen.Flag")])
 
 #INvestigate results
 trap.harvest.chronology<-merge(trap.harvest.chronology,cnt.1, by=c("AGRP_PRP_ID","unk.prp.event.id","ALWS_AGRPROP_ID"),all.x=TRUE)
-mlv(trap.harvest.chronology[trap.harvest.chronology$Orphen.Flag=="Orphen","day.diff"])
+mlv(trap.harvest.chronology[trap.harvest.chronology$Orphen.Flag=="Orphen","day.diff"], method = "shorth")
 mean(trap.harvest.chronology[trap.harvest.chronology$Orphen.Flag=="Orphen","day.diff"])
 median(trap.harvest.chronology[trap.harvest.chronology$Orphen.Flag=="Orphen","day.diff"])
 
 hist(trap.harvest.chronology[trap.harvest.chronology$Orphen.Flag=="Orphen","day.diff"],breaks=1500,xlim=c(0,50))
 
-count(trap.harvest.chronology[trap.harvest.chronology$Orphen.Flag=="Orphen","day.diff"])
+plyr::count(trap.harvest.chronology[trap.harvest.chronology$Orphen.Flag=="Orphen","day.diff"])
 
 sum(trap.harvest.chronology[trap.harvest.chronology$Orphen.Flag=="Orphen","Take"])
 
@@ -237,7 +228,7 @@ tmp.vec <- trap.harvest.chronology[trap.harvest.chronology$trap.count==0,c("APPL
 trap.harvest.chronology[trap.harvest.chronology$trap.count==0,"trap.count"]<-tmp.vec
 trap.harvest.chronology[trap.harvest.chronology$trap.count==0,]
 
-#Set first day to 0 
+#Set first day to 0
 trap.harvest.chronology$days.active <- trap.harvest.chronology$day.diff
 trap.harvest.chronology[trap.harvest.chronology$event.type=="Event Start","days.active"] <- 0
 
@@ -333,7 +324,7 @@ agg.out.dat<-merge(agg.out.dat,tmp.merge,by=c("AGRP_PRP_ID","unk.prp.event.id","
 nrow(agg.out.dat);nrow(date.lut);length(certainty.flag)
 
 #Merge data
-date.lut <- subset(date.lut, select=-c(WT_WORK_DATE)) 
+date.lut <- subset(date.lut, select=-c(WT_WORK_DATE))
 
 agg.out.dat<-merge(agg.out.dat,date.lut,by=c("AGRP_PRP_ID","unk.prp.event.id","ALWS_AGRPROP_ID","CMP_NAME"), all.x=TRUE)
 
@@ -382,9 +373,9 @@ trap.harvest.chronology.limited <- trap.harvest.chronology[trap.harvest.chronolo
 nrow(trap.harvest.chronology.limited)
 
 #----Write Data
-write.csv(final.agg.out.dat, paste0(write.path,"feral.swine.effort.take.traps.aggregated.ALL.",Sys.Date(),".csv"))
-write.csv(trap.harvest.chronology, paste0(write.path,"feral.swine.effort.take.traps.chronology.ALL.",Sys.Date(),".csv"))
-write.csv(trap.harvest.chronology, paste0(write.path,"feral.swine.effort.take.traps.chronology.limited.ALL.",Sys.Date(),".csv"))
+write.csv(final.agg.out.dat, file.path(write.path,paste0("feral.swine.effort.take.traps.aggregated.ALL.",pull.date,".csv")))
+write.csv(trap.harvest.chronology, file.path(write.path,paste0("feral.swine.effort.take.traps.chronology.ALL.",pull.date,".csv")))
+write.csv(trap.harvest.chronology, file.path(write.path,paste0("feral.swine.effort.take.traps.chronology.limited.ALL.",pull.date,".csv")))
 
 ##----END----##
 
