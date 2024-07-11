@@ -25,9 +25,6 @@ library(plyr)
 library(dplyr)
 library(operators)
 
-#----Simple Functions
-`%not in%` <- function (x, table) is.na(match(x, table, nomatch=NA_integer_))
-
 #----Required Functions
 source("R/FNC.MIS.Pre.Process.R")
 source("R/FNC.MIS.calc.trap.effort.R")
@@ -98,18 +95,18 @@ corral.max <- max(trap.dat[trap.dat$CMP_NAME=="TRAPS, CORRAL","WTCM_QTY"])
 
 trap.dat <- trap.dat[trap.dat$WTCM_QTY < corral.max, ]
 
-# trap.dat |>
-#   filter(CMP_NAME == "TRAPS, LIVE, FERAL HOGS") |>
-#   pull(WTCM_QTY) |>
-#   hist(breaks=1000, main="CMP_NAME == TRAPS, LIVE, FERAL HOGS", xlab="WTCM_QTY")
-# trap.dat |>
-#   filter(CMP_NAME == "TRAPS, CAGE") |>
-#   pull(WTCM_QTY) |>
-#   hist(breaks=1000, main="CMP_NAME == TRAPS, CAGE", xlab="WTCM_QTY")
-# trap.dat |>
-#   filter(CMP_NAME == "TRAPS, CORRAL") |>
-#   pull(WTCM_QTY) |>
-#   hist(breaks=1000, main="CMP_NAME == TRAPS, CORRAL", xlab="WTCM_QTY")
+trap.dat |>
+  filter(CMP_NAME == "TRAPS, LIVE, FERAL HOGS") |>
+  pull(WTCM_QTY) |>
+  hist(breaks=1000, main="CMP_NAME == TRAPS, LIVE, FERAL HOGS", xlab="WTCM_QTY")
+trap.dat |>
+  filter(CMP_NAME == "TRAPS, CAGE") |>
+  pull(WTCM_QTY) |>
+  hist(breaks=1000, main="CMP_NAME == TRAPS, CAGE", xlab="WTCM_QTY")
+trap.dat |>
+  filter(CMP_NAME == "TRAPS, CORRAL") |>
+  pull(WTCM_QTY) |>
+  hist(breaks=1000, main="CMP_NAME == TRAPS, CORRAL", xlab="WTCM_QTY")
 
 
 #Convert all trap types to the same type
