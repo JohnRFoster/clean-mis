@@ -1,18 +1,19 @@
 
 
-rm(list = ls())
-#.rs.restartR()
+rm(list=ls())
 gc()
 
-#----Set Working Dir----
-setwd("C:/DATA/MIS/PigData/Dec2020/")
+#----Set Write Paths----
+write.path<-"data/processed"
 
-write.path<-"C:/Documents/Manuscripts/Feral Swine - MIS Data Description/Data/"
+#----get correct data pull----
+pull.date <- config::get("pull.date")
 
 
 #----Load Libraries----
 library(reshape2)
 library(tidyr)
+library(readr)
 library(plyr)
 library(modeest)
 library(operators)
@@ -20,30 +21,20 @@ library(utils)
 
 
 #----Required Functions
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.aerial.chronology.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.Misc.Utilities.R")
+source("R/FNC.MIS.calc.aerial.chronology.R")
+source("R/FNC.Misc.Utilities.R")
 
 
 #----Prep Data ----
 
 # Read data
-dat.Agr<-read.csv("processed.PropertyPull7Jan2021.csv",stringsAsFactors=FALSE)
-
-dat.Kill<-read.csv("processed.PigTakePropMeth16Dec2020.csv",stringsAsFactors=FALSE)
-
-dat.Eff<-read.csv("processed.Effort16Dec2020.csv",stringsAsFactors=FALSE)
-
-dat.PropKill<-read.csv("processed.PigTakeByProperty16Dec2020.csv",stringsAsFactors=FALSE)
-
-lut.property.acres<-read.csv("processed.lut.property.acres.csv",stringsAsFactors=FALSE)
-
-# Convert Dates to R Dates
-dat.Eff$WT_WORK_DATE <- as.Date(as.character(dat.Eff$WT_WORK_DATE),"%Y-%m-%d")
-dat.PropKill$WT_WORK_DATE <- as.Date(as.character(dat.PropKill$WT_WORK_DATE),"%Y-%m-%d")
+dat.Agr <- read_csv(file.path(write.path, paste0("processed_fs_national_property_", pull.date, ".csv")))
+dat.Kill <- read_csv(file.path(write.path, paste0("processed_fs_national_take_by_method_", pull.date, ".csv")))
+dat.Eff <- read_csv(file.path(write.path, paste0("processed_fs_national_effort_", pull.date, ".csv")))
+dat.PropKill <- read_csv(file.path(write.path, paste0("processed_fs_national_take_by_property_", pull.date, ".csv")))
+lut.property.acres <- read_csv(file.path(write.path, "processed_lut_property_acres.csv"))
 
 ##----END DATA PREP----
-
-
 
 #--Subset Data
 aerial.vec <- c("HELICOPTER","FIXED WING")
@@ -60,6 +51,7 @@ tmp<-tmp[tmp$USET_NAME %not in% c("DISCHARGED"),]
 #--Remove implosable values
 summary(tmp$WTM_QTY)
 summary(tmp$WTCM_QTY)
+tmp <- tmp[tmp$WTCM_QTY != 27, ]
 
 tmp$Flight.Hours <- tmp$WTCM_QTY*tmp$WTM_QTY
 tmp$Flight.Days <- (tmp$WTCM_QTY/24)*tmp$WTM_QTY
@@ -75,7 +67,7 @@ colnames(wide.data)[which(colnames(wide.data)=="WTCM_QTY")] <- "VEHICLES"
 
 in.dat<-wide.data
 
-wide.data[order(-wide.data$VEHICLES),]
+head(wide.data[order(-wide.data$VEHICLES),])
 
 ##END
 
@@ -154,7 +146,7 @@ agg.out.dat <- agg.out.dat[order(agg.out.dat$AGRP_PRP_ID,agg.out.dat$event.id),,
 
 #Generate final data
 final.agg.out.dat <- merge(agg.out.dat, lut.property.acres, by=c("AGRP_PRP_ID","ALWS_AGRPROP_ID"),all.x=TRUE)
-final.agg.out.dat <- final.agg.out.dat[,c("AGRP_PRP_ID","ALWS_AGRPROP_ID","event.id","ST_NAME","CNTY_NAME", "ST_FIPS", "CNTY_FIPS","FIPS",
+final.agg.out.dat <- final.agg.out.dat[,c("AGRP_PRP_ID","ALWS_AGRPROP_ID","event.id","ST_NAME","CNTY_NAME", "ST_GSA_STATE_CD", "CNTY_GSA_CNTY_CD","FIPS",
                                           "Start.Date","End.Date",
                                           "COUNTY.OR.CITY.LAND", "FEDERAL.LAND","MILITARY.LAND","PRIVATE.LAND","STATE.LAND","TRIBAL.LAND", "TOTAL.LAND",
                                           "CMP_NAME", "HOURS", "VEHICLES", "Flight.Hours","Flight.Days","Take")]
@@ -164,6 +156,23 @@ nrow(final.agg.out.dat)
 final.agg.out.dat<-final.agg.out.dat[is.na(final.agg.out.dat$AGRP_PRP_ID)==FALSE,]
 nrow(final.agg.out.dat)
 
+# get all property info, try and recover properties with missing FIPS
+no_area <- as_tibble(final.agg.out.dat[is.na(final.agg.out.dat$FIPS),])
+
+for_join <- no_area |>
+  dplyr::select(AGRP_PRP_ID, ALWS_AGRPROP_ID) |>
+  dplyr::distinct()
+
+propertyFIPS <- read_csv("data/propertyFIPS.csv")
+
+with_area <- dplyr::left_join(for_join, propertyFIPS) |>
+  dplyr::filter(!is.na(FIPS))
+
+recovered_areas <- dplyr::left_join(with_area, no_area) |>
+  dplyr::select(-ST_ABBR)
+
+final.agg.out.dat <- dplyr::bind_rows(final.agg.out.dat, recovered_areas)
+
 #Remove those with no FIPS Code thus no area values
 final.agg.out.dat<-final.agg.out.dat[is.na(final.agg.out.dat$FIPS)==FALSE,]
 nrow(final.agg.out.dat)
@@ -172,8 +181,8 @@ nrow(final.agg.out.dat)
 
 
 #----Write Data
-write.csv(final.agg.out.dat, paste0(write.path,"feral.swine.effort.take.aerial.ALL.",Sys.Date(),".csv"))
-write.csv(harvest.chronology, paste0(write.path,"feral.swine.effort.take.aerial.chronology.ALL.",Sys.Date(),".csv"))
+write.csv(final.agg.out.dat, file.path(write.path,paste0("feral.swine.effort.take.aerial.ALL.",pull.date,".csv")))
+write.csv(harvest.chronology, file.path(write.path,paste0("feral.swine.effort.take.aerial.chronology.ALL.",pull.date,".csv")))
 
 ##----END----##
 
