@@ -1,12 +1,8 @@
 
-rm(list=ls()) 
-
-#----Set Working Dir----
-setwd("C:/DATA/MIS/PigData/Dec2020")
-
+rm(list=ls())
 
 #----Set Write Paths----
-write.path<-"C:/Documents/Manuscripts/Feral Swine - MIS Data Description/Data/"
+write.path<-"data/processed"
 
 
 #----Load Libraries----
@@ -14,38 +10,27 @@ library(reshape2)
 library(tidyr)
 library(plyr)
 library(modeest)
-
-#----Simple Functions
-`%not in%` <- function (x, table) is.na(match(x, table, nomatch=NA_integer_))
+library(readr)
+library(operators)
 
 #----Required Functions
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.Pre.Process.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.trap.effort.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.days.elapsed.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.trap.chronology.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.Misc.Utilities.R")
-
-
-
-
+source("R/FNC.MIS.Pre.Process.R")
+source("R/FNC.MIS.calc.trap.effort.R")
+source("R/FNC.MIS.calc.days.elapsed.R")
+source("R/FNC.MIS.calc.trap.chronology.R")
+source("R/FNC.Misc.Utilities.R")
 
 #----Prep Data ----
 
+#----get correct data pull----
+pull.date <- config::get("pull.date")
+
 # Read data
-dat.Agr<-read.csv("processed.trapping.PropertyMar2021b.csv",stringsAsFactors=FALSE)
-
-dat.Kill<-read.csv("processed.PigTakePropMeth16Dec2020.csv",stringsAsFactors=FALSE)
-
-dat.Eff<-read.csv("processed.Effort16Dec2020.csv",stringsAsFactors=FALSE)
-
-dat.PropKill<-read.csv("processed.PigTakeByProperty16Dec2020.csv",stringsAsFactors=FALSE)
-
-lut.property.acres<-read.csv("processed.lut.property.acres.csv",stringsAsFactors=FALSE)
-
-# Convert Dates to R Dates
-dat.Kill$WT_WORK_DATE <- as.Date(as.character(dat.Kill$WT_WORK_DATE),"%Y-%m-%d")
-dat.Eff$WT_WORK_DATE <- as.Date(as.character(dat.Eff$WT_WORK_DATE),"%Y-%m-%d")
-dat.PropKill$WT_WORK_DATE <- as.Date(as.character(dat.PropKill$WT_WORK_DATE),"%Y-%m-%d")
+dat.Agr <- read_csv(file.path(write.path, paste0("processed_fs_national_property_", pull.date, ".csv")))
+dat.Kill <- read_csv(file.path(write.path, paste0("processed_fs_national_take_by_method_", pull.date, ".csv")))
+dat.Eff <- read_csv(file.path(write.path, paste0("processed_fs_national_effort_", pull.date, ".csv")))
+dat.PropKill <- read_csv(file.path(write.path, paste0("processed_fs_national_take_by_property_", pull.date, ".csv")))
+lut.property.acres <- read_csv(file.path(write.path, "processed_lut_property_acres.csv"))
 
 # Restrict to properties to those with feral swine and exclude potential bias in trapping
 dat.Agr<-dat.Agr[dat.Agr$DA_NAME_TYPE %!in% c("small mammal","rodent"),]
@@ -98,7 +83,7 @@ trap.dat<-trap.dat[trap.dat$CMP_NAME %in% trap.vec,]
 
 corral.max <- max(trap.dat[trap.dat$CMP_NAME=="TRAPS, CORRAL","WTCM_QTY"])
 
-trap.dat <- trap.dat[trap.dat$WTCM_QTY < corral.max, ] 
+trap.dat <- trap.dat[trap.dat$WTCM_QTY < corral.max, ]
 
 #Convert all trap types to the same type
 trap.dat[,"CMP_NAME"] <- "TRAPS, CAGE"
@@ -114,12 +99,12 @@ trap.dat[,"CMP_NAME"] <- "TRAPS, CAGE"
 #----Generate summary of trap nights and kill by each trapping event
 
 #Read in Harvest Chronology
-trap.harvest.chronology<-read.csv(paste0(write.path,"feral.swine.effort.take.traps.chronology.limited.ALL.2021-03-24.csv"),stringsAsFactors=FALSE)
+file.name <- file.path(write.path,paste0("feral.swine.effort.take.traps.chronology.limited.ALL.",pull.date,".csv"))
+trap.harvest.chronology<-read.csv(file.name,stringsAsFactors=FALSE)
 trap.harvest.chronology <- trap.harvest.chronology[,-1]
 nrow(trap.harvest.chronology)
 
 trap.harvest.chronology$WT_WORK_DATE <- as.Date(as.character(trap.harvest.chronology$WT_WORK_DATE,"%Y-%m-%d"))
-date.lut <- calc.event.length(trap.harvest.chronology)
 
 #Adjust for Daily Trapping Summary
 trap.harvest.chronology <- calc.days.between.records(trap.harvest.chronology)
@@ -192,8 +177,7 @@ head(final.agg.out.dat)
 
 
 #----Write Data
-write.csv(final.agg.out.dat, paste0(write.path,"feral.swine.effort.take.trap.ALL.daily.events.",Sys.Date(),".csv"))
-
+write.csv(final.agg.out.dat, file.path(write.path,paste0("feral.swine.effort.take.trap.ALL.daily.events.",pull.date,".csv")))
 ##----END----##
 
 
@@ -214,7 +198,7 @@ abline(a=0,b=1,col="red")
 plot(log(final.agg.out.dat$trap.nights),log(final.agg.out.dat$Take),xlab="log Trap Nights",ylab="log Take")
 abline(a=0,b=1,col="red")
 
-
+dev.off()
 plot(final.agg.out.dat$event.length,final.agg.out.dat$Take)
 
 
@@ -253,6 +237,7 @@ nrow(agg.out.dat)
 #----Determine uncertainity
 
 #Determine Trap count at end of trapping
+date.lut <- calc.event.length(trap.harvest.chronology)
 tmp.merge <- merge(date.lut, trap.harvest.chronology, by=c("AGRP_PRP_ID","event.id","WT_WORK_DATE","CMP_NAME"),all.x=TRUE)
 tmp.merge <- tmp.merge[,c("AGRP_PRP_ID", "event.id", "WT_WORK_DATE", "CMP_NAME", "trap.count.event")]
 tmp.merge <- unique(tmp.merge)
@@ -272,7 +257,7 @@ agg.out.dat<-merge(agg.out.dat,tmp.merge,by=c("AGRP_PRP_ID","event.id","CMP_NAME
 nrow(agg.out.dat);nrow(date.lut);length(certainty.flag)
 
 #Merge data
-date.lut <- subset(date.lut, select=-c(WT_WORK_DATE)) 
+date.lut <- subset(date.lut, select=-c(WT_WORK_DATE))
 
 agg.out.dat<-merge(agg.out.dat,date.lut,by=c("AGRP_PRP_ID","event.id","CMP_NAME"), all.x=TRUE)
 
@@ -284,11 +269,15 @@ agg.out.dat <- agg.out.dat[,c("AGRP_PRP_ID","event.id","CMP_NAME","start.date","
 
 #Generate final data
 final.agg.out.dat <- merge(agg.out.dat, lut.property.acres, by="AGRP_PRP_ID",all.x=TRUE)
-final.agg.out.dat <- final.agg.out.dat[,c("AGRP_PRP_ID","event.id","ST_NAME","CNTY_NAME", "ST_FIPS", "CNTY_FIPS", "COUNTY.OR.CITY.LAND","MILITARY.LAND","PRIVATE.LAND","STATE.LAND","TRIBAL.LAND","TOTAL.LAND","CMP_NAME", "start.date","end.date", "event.length", "trap.nights", "Take", "trap.night.certainty")]
+final.agg.out.dat <- final.agg.out.dat[,c("AGRP_PRP_ID","event.id","ST_NAME","CNTY_NAME", "ST_GSA_STATE_CD",
+                                          "CNTY_GSA_CNTY_CD", "FIPS", "COUNTY.OR.CITY.LAND","MILITARY.LAND",
+                                          "PRIVATE.LAND","STATE.LAND","TRIBAL.LAND","TOTAL.LAND",
+                                          "CMP_NAME", "start.date","end.date", "event.length",
+                                          "trap.nights", "Take", "trap.night.certainty")]
 final.agg.out.dat <- final.agg.out.dat[order(final.agg.out.dat$AGRP_PRP_ID,final.agg.out.dat$event.id),]
 
 nrow(final.agg.out.dat)
-
+head(final.agg.out.dat)
 
 #Remove events with zero trap nights
 non.zero.lut <- rownames(final.agg.out.dat[final.agg.out.dat$trap.nights!=0,])
@@ -296,10 +285,12 @@ non.zero.lut <- rownames(final.agg.out.dat[final.agg.out.dat$trap.nights!=0,])
 #Limit to those with non-zero trap nights
 final.agg.out.dat <- final.agg.out.dat[rownames(final.agg.out.dat) %in% non.zero.lut,]
 nrow(final.agg.out.dat)
+head(final.agg.out.dat)
 
 #Limit to high and moderate certainity
 final.agg.out.dat <- final.agg.out.dat[final.agg.out.dat$trap.night.certainty!="low",]
 nrow(final.agg.out.dat)
+head(final.agg.out.dat)
 
 #Limit Event Length
 final.agg.out.dat <- final.agg.out.dat[final.agg.out.dat$event.length<90,]
@@ -310,12 +301,10 @@ final.agg.out.dat <- final.agg.out.dat[final.agg.out.dat$TOTAL.LAND>0,]
 nrow(final.agg.out.dat)
 
 final.agg.out.dat<-final.agg.out.dat[complete.cases(final.agg.out.dat$AGRP_PRP_ID),]
-
+nrow(final.agg.out.dat)
 
 #----Write Data
-write.date <- Sys.Date()
-
-write.csv(final.agg.out.dat, paste("feral.swine.effort.take.traps.ALL",write.date,".csv",sep=""))
-write.csv(trap.harvest.chronology, paste("feral.swine.effort.take.traps.chronology.ALL",write.date,".csv",sep=""))
+write.csv(final.agg.out.dat, file.path(write.path,paste0("feral.swine.effort.take.traps.ALL",pull.date,".csv")))
+write.csv(trap.harvest.chronology, file.path(write.path,paste0("feral.swine.effort.take.traps.chronology.ALL",pull.date,".csv")))
 
 ##----END----##
