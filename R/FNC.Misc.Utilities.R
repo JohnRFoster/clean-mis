@@ -237,7 +237,7 @@ generate.trap.chronology <- function(trap.dat, dat.PropKill, trap.vec, time.ther
   require(utils)
 
   #----Required Functions
-  source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.aerial.chronology.R")
+  source("R/FNC.MIS.calc.aerial.chronology.R")
 
   #Clean things up
   if(exists(x="out.harvest.chronology")){
