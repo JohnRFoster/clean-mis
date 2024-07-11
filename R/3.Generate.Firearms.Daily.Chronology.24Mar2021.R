@@ -5,17 +5,8 @@
 #
 #---------
 
-
-
-
 rm(list = ls())
-#.rs.restartR()
 gc()
-
-#----Set Working Dir----
-setwd("C:/DATA/MIS/PigData/Dec2020/")
-
-write.path<-"C:/Documents/Manuscripts/Feral Swine - MIS Data Description/Data/"
 
 
 #----Load Libraries----
@@ -26,10 +17,15 @@ library(modeest)
 library(operators)
 library(utils)
 
+#----get correct data pull----
+pull.date <- config::get("pull.date")
+
+#----Set Write Paths----
+write.path<-"data/processed"
 
 #----Required Functions
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.aerial.chronology.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.Misc.Utilities.R")
+source("R/FNC.MIS.calc.aerial.chronology.R")
+source("R/FNC.Misc.Utilities.R")
 
 
 
