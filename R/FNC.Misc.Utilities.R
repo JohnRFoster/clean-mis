@@ -510,5 +510,7 @@ adjust.firearm.data <- function(in.dat,thershold=5){
   return(in.dat)
 }#END Function
 
+#----Simple Functions
+`%not in%` <- function (x, table) is.na(match(x, table, nomatch=NA_integer_))
 
 
