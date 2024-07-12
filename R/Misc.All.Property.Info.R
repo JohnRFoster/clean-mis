@@ -3,9 +3,7 @@
 #
 # Generate a table that has all property info
 #
-# BETA Version
-#
-# Ryan Miller, John Foster
+# John Foster
 #----------------------------------
 
 

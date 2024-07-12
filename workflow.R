@@ -14,7 +14,7 @@ message("\nPreprocessing done")
 
 
 
-message("\n\n=============      TRAPS      =============")
+message("\n\n=============      Traps      =============")
 message("Trap Chronology")
 source("R/2.1.Generate.Trap.Chronolgy.R")
 message("Trap Chronology done")
