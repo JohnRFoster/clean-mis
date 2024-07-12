@@ -1,12 +1,9 @@
 
-rm(list=ls()) 
 
-#----Set Working Dir----
-setwd("C:/DATA/MIS/PigData/Dec2020")
-
+rm(list=ls())
 
 #----Set Write Paths----
-write.path<-"C:/Documents/Manuscripts/Feral Swine - MIS Data Description/Data/"
+write.path<-"data/processed"
 
 
 #----Load Libraries----
@@ -14,36 +11,28 @@ library(reshape2)
 library(tidyr)
 library(plyr)
 library(modeest)
-
-#----Simple Functions
-`%not in%` <- function (x, table) is.na(match(x, table, nomatch=NA_integer_))
+library(readr)
+library(operators)
 
 #----Required Functions
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.Pre.Process.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.trap.effort.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.days.elapsed.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.MIS.calc.trap.chronology.R")
-source("C:\\Documents\\Manuscripts\\Feral Swine - MIS Data Description\\Code\\FNC.Misc.Utilities.R")
-
-
+source("R/FNC.MIS.Pre.Process.R")
+source("R/FNC.MIS.calc.trap.effort.R")
+source("R/FNC.MIS.calc.days.elapsed.R")
+source("R/FNC.MIS.calc.trap.chronology.R")
+source("R/FNC.Misc.Utilities.R")
 
 #----Prep Data ----
 
+#----get correct data pull----
+pull.date <- config::get("pull.date")
+
 # Read data
-dat.Agr<-read.csv("processed.trapping.PropertyMar2021b.csv",stringsAsFactors=FALSE)
+dat.Agr <- read_csv(file.path(write.path, paste0("processed_fs_national_property_", pull.date, ".csv")))
+dat.Kill <- read_csv(file.path(write.path, paste0("processed_fs_national_take_by_method_", pull.date, ".csv")))
+dat.Eff <- read_csv(file.path(write.path, paste0("processed_fs_national_effort_", pull.date, ".csv")))
+dat.PropKill <- read_csv(file.path(write.path, paste0("processed_fs_national_take_by_property_", pull.date, ".csv")))
+lut.property.acres <- read_csv(file.path(write.path, "processed_lut_property_acres.csv"))
 
-dat.Kill<-read.csv("processed.PigTakePropMeth16Dec2020.csv",stringsAsFactors=FALSE)
-
-dat.Eff<-read.csv("processed.Effort16Dec2020.csv",stringsAsFactors=FALSE)
-
-dat.PropKill<-read.csv("processed.PigTakeByProperty16Dec2020.csv",stringsAsFactors=FALSE)
-
-lut.property.acres<-read.csv("processed.lut.property.acres.csv",stringsAsFactors=FALSE)
-
-# Convert Dates to R Dates
-dat.Kill$WT_WORK_DATE <- as.Date(as.character(dat.Kill$WT_WORK_DATE),"%Y-%m-%d")
-dat.Eff$WT_WORK_DATE <- as.Date(as.character(dat.Eff$WT_WORK_DATE),"%Y-%m-%d")
-dat.PropKill$WT_WORK_DATE <- as.Date(as.character(dat.PropKill$WT_WORK_DATE),"%Y-%m-%d")
 
 
 # Restrict to properties to those with feral swine and exclude potential bias in snaring
@@ -72,7 +61,7 @@ lut.property.acres <- lut.property.acres[lut.property.acres$unk.id %in% unique(d
 #----Generate summary of trap nights and kill by each trapping event
 
 #Read in Harvest Chronology
-trap.harvest.chronology<-read.csv(paste0(write.path,"feral.swine.effort.take.snare.chronology.ALL2021-03-16.csv"),stringsAsFactors=FALSE)
+trap.harvest.chronology<-read_csv(file.path(write.path,paste0("feral.swine.effort.take.snare.chronology.ALL", pull.date,".csv")))
 trap.harvest.chronology <- trap.harvest.chronology[,-1]
 trap.harvest.chronology$WT_WORK_DATE <- as.Date(as.character(trap.harvest.chronology$WT_WORK_DATE,"y%-%m-%d"))
 date.lut <- calc.event.length(trap.harvest.chronology)
@@ -219,7 +208,7 @@ agg.out.dat<-merge(agg.out.dat,tmp.merge,by=c("AGRP_PRP_ID","event.id","CMP_NAME
 nrow(agg.out.dat);nrow(date.lut);length(certainty.flag)
 
 #Merge data
-date.lut <- subset(date.lut, select=-c(WT_WORK_DATE)) 
+date.lut <- subset(date.lut, select=-c(WT_WORK_DATE))
 
 agg.out.dat<-merge(agg.out.dat,date.lut,by=c("AGRP_PRP_ID","event.id","CMP_NAME"), all.x=TRUE)
 
