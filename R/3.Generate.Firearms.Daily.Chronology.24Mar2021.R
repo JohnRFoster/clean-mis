@@ -34,7 +34,7 @@ source("R/FNC.Misc.Utilities.R")
 #----Generate summary of trap nights and kill by each trapping event
 
 #Read in Harvest Chronology
-trap.harvest.chronology<-read.csv(paste0(write.path,"feral.swine.effort.take.aerial.chronology.ALL.2021-03-03.csv"),stringsAsFactors=FALSE)
+trap.harvest.chronology<-read.csv(file.path(write.path,paste0("feral.swine.effort.take.aerial.chronology.ALL.", pull.date,".csv")),stringsAsFactors=FALSE)
 trap.harvest.chronology <- trap.harvest.chronology[,-1]
 trap.harvest.chronology$WT_WORK_DATE <- as.Date(as.character(trap.harvest.chronology$WT_WORK_DATE,"%y-%m-%d"))
 
@@ -77,6 +77,7 @@ colnames(tmp)[which(colnames(tmp)=="within.event.end.date")] <- "End.Date"
 
 
 #Generate final data
+lut.property.acres <- readr::read_csv(file.path(write.path, "processed_lut_property_acres.csv"))
 tmp <- merge(tmp, lut.property.acres, by=c("AGRP_PRP_ID","ALWS_AGRPROP_ID"),all.x=TRUE)
 tmp <- tmp[,c("AGRP_PRP_ID","ALWS_AGRPROP_ID","unk.prp.event.id","ST_NAME","CNTY_NAME", "ST_GSA_STATE_CD", "CNTY_GSA_CNTY_CD","FIPS",
                                           "Start.Date","End.Date",
@@ -90,36 +91,15 @@ tmp<-tmp[is.na(tmp$AGRP_PRP_ID)==FALSE,]
 nrow(tmp)
 
 #Remove those with no FIPS Code thus no area values
+tmp <- check.all.properties(tmp)
 tmp<-tmp[is.na(tmp$FIPS)==FALSE,]
 nrow(tmp)
 
 #----END fill in missing values
 
 #----Write Data
-write.csv(tmp, paste0(write.path,"feral.swine.effort.take.aerial.ALL.daily.",Sys.Date(),".csv"), row.names=FALSE)
+write.csv(tmp, file.path(write.path,paste0("feral.swine.effort.take.aerial.ALL.daily.",pull.date,".csv")), row.names=FALSE)
 
 #----END END
-
-
-
-
-
-
-
-
-old<-read.csv("C:/Documents/Manuscripts/Feral Swine - MIS Data Description/Data/feral.swine.effort.take.aerial.ALL2018-02-23.csv")
-
-
-
-
-
-
-
-
-trap.harvest.chronology[trap.harvest.chronology$day.diff!=trap.harvest.chronology$time.since.event,]
-
-trap.harvest.chronology[trap.harvest.chronology$AGRP_PRP_ID==111849,]
-
-dat.o[dat.o$AGRP_PRP_ID==111849,]
 
 
