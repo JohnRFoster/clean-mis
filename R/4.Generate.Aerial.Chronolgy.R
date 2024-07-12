@@ -156,24 +156,8 @@ nrow(final.agg.out.dat)
 final.agg.out.dat<-final.agg.out.dat[is.na(final.agg.out.dat$AGRP_PRP_ID)==FALSE,]
 nrow(final.agg.out.dat)
 
-# get all property info, try and recover properties with missing FIPS
-no_area <- as_tibble(final.agg.out.dat[is.na(final.agg.out.dat$FIPS),])
-
-for_join <- no_area |>
-  dplyr::select(AGRP_PRP_ID, ALWS_AGRPROP_ID) |>
-  dplyr::distinct()
-
-propertyFIPS <- read_csv("data/propertyFIPS.csv")
-
-with_area <- dplyr::left_join(for_join, propertyFIPS) |>
-  dplyr::filter(!is.na(FIPS))
-
-recovered_areas <- dplyr::left_join(with_area, no_area) |>
-  dplyr::select(-ST_ABBR)
-
-final.agg.out.dat <- dplyr::bind_rows(final.agg.out.dat, recovered_areas)
-
 #Remove those with no FIPS Code thus no area values
+final.agg.out.dat <- check.all.properties(final.agg.out.dat)
 final.agg.out.dat<-final.agg.out.dat[is.na(final.agg.out.dat$FIPS)==FALSE,]
 nrow(final.agg.out.dat)
 
