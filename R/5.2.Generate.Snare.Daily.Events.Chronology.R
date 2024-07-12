@@ -242,7 +242,7 @@ final.agg.out.dat <- final.agg.out.dat[final.agg.out.dat$event.length<90,]
 nrow(final.agg.out.dat)
 
 #Limit to only those with acreage
-final.agg.out.dat <- final.agg.out.dat[final.agg.out.dat$TOTAL.LAND>0,]
+final.agg.out.dat <- final.agg.out.dat[final.agg.out.dat$TOTAL.LAND>1,]
 nrow(final.agg.out.dat)
 
 final.agg.out.dat<-final.agg.out.dat[complete.cases(final.agg.out.dat$AGRP_PRP_ID),]

@@ -97,6 +97,7 @@ nrow(tmp)
 
 #Remove those with no FIPS Code thus no area values
 tmp <- check.all.properties(tmp)
+tmp<-tmp[tmp$TOTAL.LAND!=1,]
 tmp<-tmp[is.na(tmp$FIPS)==FALSE,]
 nrow(tmp)
 
