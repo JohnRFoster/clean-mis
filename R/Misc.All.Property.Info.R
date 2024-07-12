@@ -42,6 +42,9 @@ all_properties <- all_properties |>
   distinct()
 
 propertyFIPS <- left_join(all_properties, all_county_info) |>
-  filter(!is.na(FIPS))
+  filter(!is.na(FIPS)) |>
+  group_by(AGRP_PRP_ID, ALWS_AGRPROP_ID) |>
+  filter(TOTAL.LAND == max(TOTAL.LAND)) |>
+  ungroup()
 
 write_csv(propertyFIPS, "data/propertyFIPS.csv")
