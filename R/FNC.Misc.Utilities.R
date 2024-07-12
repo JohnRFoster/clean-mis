@@ -513,4 +513,25 @@ adjust.firearm.data <- function(in.dat,thershold=5){
 #----Simple Functions
 `%not in%` <- function (x, table) is.na(match(x, table, nomatch=NA_integer_))
 
+# get all property info, try and recover properties with missing FIPS
+check.all.properties <- function(tmp){
+
+  no_area <- as_tibble(tmp[is.na(tmp$FIPS),])
+
+  for_join <- no_area |>
+    dplyr::select(AGRP_PRP_ID, ALWS_AGRPROP_ID) |>
+    dplyr::distinct()
+
+  propertyFIPS <- readr::read_csv("data/propertyFIPS.csv")
+
+  with_area <- dplyr::left_join(for_join, propertyFIPS) |>
+    dplyr::filter(!is.na(FIPS))
+
+  recovered_areas <- dplyr::left_join(with_area, no_area) |>
+    dplyr::select(-ST_ABBR)
+
+  tmp <- dplyr::bind_rows(tmp, recovered_areas)
+  return(tmp)
+}
+
 
