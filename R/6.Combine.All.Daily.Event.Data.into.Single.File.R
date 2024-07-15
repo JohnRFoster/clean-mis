@@ -1,14 +1,15 @@
 
 
+rm(list=ls())
 
+#----Set Write Paths----
+write.path<-"data/processed"
 
-#----Set Working Dir----
-setwd("C:/Documents/Manuscripts/Feral Swine - MIS Data Description/Data/")
-
-
+#----get correct data pull----
+pull.date <- config::get("pull.date")
 
 ##----SNARE
-dat.snare<-read.csv("feral.swine.effort.take.snare.ALL.daily.events.2021-03-24.csv")
+dat.snare<-read.csv(file.path(write.path, paste0("feral.swine.effort.take.snare.ALL.daily.", pull.date,".csv")))
 
 dat.snare<-dat.snare[is.na(dat.snare$AGRP_PRP_ID)==FALSE,]
 nrow(dat.snare)
@@ -24,7 +25,7 @@ dat.snare$WT_WORK_DATE <- dat.snare$start.date
 dat.snare<-dat.snare[,c("AGRP_PRP_ID","unk.prp.event.id","ALWS_AGRPROP_ID",
                         "ST_NAME","CNTY_NAME","ST_GSA_STATE_CD", "CNTY_GSA_CNTY_CD","FIPS","WT_WORK_DATE",
                         "start.date","end.date","TOTAL.LAND",
-                        "CMP_NAME","CMP.Qty","HOURS","CMP.Hours","CMP.Days","Take")]  
+                        "CMP_NAME","CMP.Qty","HOURS","CMP.Hours","CMP.Days","Take")]
 colnames(dat.snare)<-tolower(colnames(dat.snare))
 
 nrow(dat.snare)
@@ -36,7 +37,7 @@ nrow(dat.snare)
 
 
 ##----TRAP
-dat.trap<-read.csv("feral.swine.effort.take.trap.ALL.daily.events.2021-03-25.csv")
+dat.trap<-read.csv(file.path(write.path, paste0("feral.swine.effort.take.trap.ALL.daily.events.",pull.date,".csv")))
 dat.trap<-dat.trap[is.na(dat.trap$AGRP_PRP_ID)==FALSE,]
 nrow(dat.trap)
 
@@ -49,7 +50,7 @@ dat.trap$WT_WORK_DATE <- dat.trap$start.date
 dat.trap<-dat.trap[,c("AGRP_PRP_ID","unk.prp.event.id","ALWS_AGRPROP_ID",
                       "ST_NAME","CNTY_NAME","ST_GSA_STATE_CD", "CNTY_GSA_CNTY_CD","FIPS","WT_WORK_DATE",
                       "start.date","end.date","TOTAL.LAND",
-                      "CMP_NAME","CMP.Qty","HOURS","CMP.Hours","CMP.Days","Take")]    
+                      "CMP_NAME","CMP.Qty","HOURS","CMP.Hours","CMP.Days","Take")]
 colnames(dat.trap)<-tolower(colnames(dat.trap))
 
 nrow(dat.trap)
@@ -58,7 +59,7 @@ nrow(dat.trap)
 
 
 ##----FIREARMS
-dat.firearms<-read.csv("feral.swine.effort.take.firearms.ALL.daily.events.2021-03-24.csv")
+dat.firearms<-read.csv(file.path(write.path, paste0("feral.swine.effort.take.firearms.ALL.daily.",pull.date,".csv")))
 dat.firearms<-dat.firearms[is.na(dat.firearms$AGRP_PRP_ID)==FALSE,]
 nrow(dat.firearms)
 
@@ -75,7 +76,7 @@ colnames(dat.firearms)[which(colnames(dat.firearms) %in% c("ST_FIPS","CNTY_FIPS"
 dat.firearms<- dat.firearms[,c("AGRP_PRP_ID","unk.prp.event.id","ALWS_AGRPROP_ID",
                                "ST_NAME","CNTY_NAME","ST_GSA_STATE_CD","CNTY_GSA_CNTY_CD","FIPS","WT_WORK_DATE",
                                "Start.Date","End.Date","TOTAL.LAND",
-                               "CMP_NAME","CMP.Qty","HOURS","CMP.Hours","CMP.Days","Take")]    
+                               "CMP_NAME","CMP.Qty","HOURS","CMP.Hours","CMP.Days","Take")]
 colnames(dat.firearms)<-tolower(colnames(dat.firearms))
 
 nrow(dat.firearms)
@@ -83,7 +84,7 @@ nrow(dat.firearms)
 
 
 ##----AERIAL
-dat.aerial<-read.csv("feral.swine.effort.take.aerial.ALL.daily.events.2021-03-23.csv")
+dat.aerial<-read.csv(file.path(write.path, paste0("feral.swine.effort.take.aerial.ALL.daily.",pull.date,".csv")))
 dat.aerial<-dat.aerial[is.na(dat.aerial$AGRP_PRP_ID)==FALSE,]
 nrow(dat.aerial)
 
@@ -112,33 +113,25 @@ ncol(dat.snare)
 All.Methods<-rbind.data.frame(dat.aerial, dat.firearms, dat.trap, dat.snare)
 
 All.Methods$end.date<-as.Date(All.Methods$end.date)
+All.Methods$start.date<-as.Date(All.Methods$start.date)
 
 
 colnames(All.Methods)[which(colnames(All.Methods) %in% "total.land")]<-"property.size"
 
-nrow(dat.aerial)
-nrow(dat.trap)
-nrow(dat.snare)
-nrow(dat.firearms)
+sum(c(
+  nrow(dat.aerial),
+  nrow(dat.trap),
+  nrow(dat.snare),
+  nrow(dat.firearms)
+))
 
 nrow(All.Methods)
 
 All.Methods<-All.Methods[complete.cases(All.Methods),]
 nrow(All.Methods)
 
-write.csv(All.Methods, paste0("MIS.Effort.Take.All.Methods.Daily.Events.",Sys.Date(),".csv"))
+write.csv(All.Methods, file.path(write.path, paste0("MIS.Effort.Take.All.Methods.Daily.Events.",pull.date,".csv")))
 nrow(All.Methods)
-
-
-
-
-
-tmp<-read.csv("MIS.Effort.Take.All.Methods.9Apr2018.csv")
-nrow(tmp)
-
-
-tmp<-read.csv("MIS.Effort.Take.All.Methods.14Dec2020.csv")
-nrow(tmp)
 
 #----END
 
