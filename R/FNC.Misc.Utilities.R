@@ -96,14 +96,10 @@ calc.days.between.records <- function(in.dat){
 #----FNC Calculates Start and Stop Dates for Each Record
 calc.start.stop.by.record <- function(in.dat, adjustment=0){
 
-  property.event.vec<-unique(in.dat[,"unk.prp.event.id"])
+  property.event.vec<-unique(in.dat$unk.prp.event.id)
 
   in.dat$within.event.str.date <- NA
-  class(in.dat$within.event.str.date)  <- "Date"
-
   in.dat$within.event.end.date <- NA
-  class(in.dat$within.event.end.date)  <- "Date"
-
   pb <- txtProgressBar(min = 0, max = length(property.event.vec), style = 3)
 
   for(k in 1:length(property.event.vec)){
@@ -111,29 +107,29 @@ calc.start.stop.by.record <- function(in.dat, adjustment=0){
     tmp<-in.dat[in.dat$unk.prp.event.id==property.event.vec[k],]
 
     within.event.str.date<-vector()
-    class(within.event.str.date) <- "Date"
     within.event.end.date<-vector()
-    class(within.event.end.date) <- "Date"
 
     for(i in 1:nrow(tmp)){
       if(i==1){
-        within.event.str.date[i] <- tmp[i,"WT_WORK_DATE"]
-        within.event.end.date[i] <- tmp[i,"WT_WORK_DATE"]
+        within.event.str.date[i] <- as.character(tmp$WT_WORK_DATE[i])
+        within.event.end.date[i] <- as.character(tmp$WT_WORK_DATE[i])
       }
 
       if(i>1){
-        within.event.str.date[i] <- tmp[i,"WT_WORK_DATE"]-(tmp[i,"day.diff"]-adjustment)
-        within.event.end.date[i] <- tmp[i,"WT_WORK_DATE"]
+        within.event.str.date[i] <- as.character(tmp$WT_WORK_DATE[i]-(tmp$day.diff[i]-adjustment))
+        within.event.end.date[i] <- as.character(tmp$WT_WORK_DATE[i])
       }
     }#END LOOP
 
-    in.dat[in.dat$unk.prp.event.id==property.event.vec[k],"within.event.str.date"] <-within.event.str.date
-    in.dat[in.dat$unk.prp.event.id==property.event.vec[k],"within.event.end.date"] <-within.event.end.date
+    in.dat[in.dat$unk.prp.event.id==property.event.vec[k],"within.event.str.date"] <- within.event.str.date
+    in.dat[in.dat$unk.prp.event.id==property.event.vec[k],"within.event.end.date"] <- within.event.end.date
 
-    #print(paste0(round( (k/length(property.event.vec))*100,digits=1), " %"))
+    setTxtProgressBar(pb, k)
+
   }#END LOOP
 
-  setTxtProgressBar(pb, k)
+  in.dat$within.event.str.date <- lubridate::ymd(in.dat$within.event.str.date)
+  in.dat$within.event.end.date <- lubridate::ymd(in.dat$within.event.end.date)
 
   return(in.dat)
 }#END FUNCTION
@@ -144,14 +140,14 @@ calc.start.stop.by.record <- function(in.dat, adjustment=0){
 #----FNC Calculates Start and Stop Dates for Each Record
 add.within.event.id <- function(in.dat){
 
-  num.records<-count(in.dat[,"unk.prp.event.id"])
-  num.records<-num.records[order(num.records$x),]
+  num.records<-plyr::count(in.dat[,"unk.prp.event.id"])
+  num.records<-num.records[order(num.records$freq),]
 
   for(k in 1:nrow(num.records)){
     num.vec<-seq(1,num.records[k,"freq"],1)
     if(k==1){out.vec<-num.vec}
     if(k>1){out.vec<-c(out.vec,num.vec)}
-    }
+  }
 
   in.dat<-in.dat[order(in.dat$unk.prp.event.id),]
   in.dat$within.id <- out.vec
@@ -159,7 +155,7 @@ add.within.event.id <- function(in.dat){
   #Reorder
   in.dat<-in.dat[order(in.dat$AGRP_PRP_ID,in.dat$event.id,in.dat$WT_WORK_DATE),]
 
-return(in.dat)
+  return(in.dat)
 }#END FUNCTION
 
 

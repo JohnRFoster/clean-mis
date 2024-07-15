@@ -33,7 +33,7 @@ all_county_info <- left_join(county_areas, state_abbr) |>
                 ST_NAME = toupper(ST_NAME)) |>
   distinct()
 
-all_properties <- read_csv(paste0("data/raw/fs_national_property_", pull.date, ".csv"))
+all_properties <- read_csv(paste0("data/processed/processed_fs_national_property_", pull.date, ".csv"))
 all_properties <- all_properties |>
   select(AGRP_PRP_ID, ALWS_AGRPROP_ID, PRPS_QTY, ST_NAME, CNTY_NAME) |>
   rename(TOTAL.LAND = PRPS_QTY) |>
