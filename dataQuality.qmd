@@ -1,0 +1,139 @@
+---
+title: "MIS Data Quality"
+author: "John R. Foster"
+format: docx
+editor: visual
+execute: 
+  warning: false
+  error: false
+  echo: false
+---
+
+## MIS data overview
+
+```{r}
+#| label: setup
+
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(knitr)
+
+#----Required Functions
+source("R/FNC.MIS.calc.aerial.chronology.R")
+source("R/FNC.Misc.Utilities.R")
+source("R/FNC.MIS.Pre.Process.R")
+
+#----get correct data pull----
+pull.date <- config::get("pull.date")
+
+#---- read path ----
+read.path <- "data/raw"
+
+#---- write path ----
+write.path <- "data/processed"
+processed <- "processed_"
+
+#--Property Data
+csv.name <- paste0("fs_national_take_by_property_", pull.date, ".csv")
+file.name <- file.path(read.path, csv.name)
+df <- read_csv(file.name)
+dat.Agr.take <- df |>
+  distinct() |>
+  select(-PRPS_QTY) |>
+  mutate(AGRPROP_ID = WT_AGRPROP_ID)
+
+csv.name <- paste0("fs_national_property_", pull.date, ".csv")
+file.name <- file.path(read.path, csv.name)
+df <- read_csv(file.name)
+dat.Agr.property <- df |>
+  distinct() |>
+  group_by(AGRP_PRP_ID, ALWS_AGRPROP_ID, ALWS_DA_ID, PRP_NAME, ST_NAME, 
+           ST_GSA_STATE_CD, CNTY_NAME, CNTY_GSA_CNTY_CD, PRPS_PROP_TYPE) |>
+  filter(PRPS_QTY == max(PRPS_QTY)) |> # Assume max PRPS_QTY is property size
+  ungroup() |>
+  mutate(AGRPROP_ID = ALWS_AGRPROP_ID)
+
+n_raw <- length(unique(dat.Agr.property$AGRP_PRP_ID))
+n_with_pigs <- length(unique(dat.Agr.take$AGRP_PRP_ID))
+
+dat.Agr <- left_join(dat.Agr.take, dat.Agr.property)
+
+# the number of properties that have an area listed as 1 acre
+n_1acre <- dat.Agr |> 
+  filter(PRPS_QTY == 1) |> 
+  nrow()
+
+# the number of properties that have missing area information
+n_na_area <- dat.Agr |> 
+  filter(is.na(PRPS_QTY)) |> 
+  nrow()
+
+
+
+n_raw_records <- nrow(dat.Agr.take)
+min_date <- min(dmy(dat.Agr$WT_WORK_DATE))
+max_date <- max(dmy(dat.Agr$WT_WORK_DATE))
+
+dat.Agr2 <- dat.Agr[complete.cases(dat.Agr$ST_GSA_STATE_CD),]
+n_prop <- length(unique(dat.Agr2$AGRP_PRP_ID))
+
+dat.Agr4 <- dat.Agr2[dat.Agr2$DA_NAME=="SWINE, FERAL",]
+lut.property.acres <- make.property.lut(dat.Agr4)
+lut.property.acres <- lut.property.acres[lut.property.acres$TOTAL.LAND > 0, ]
+
+n_prop_not0 <- length(unique(lut.property.acres$AGRP_PRP_ID))
+
+
+
+```
+
+The raw (unprocessed) MIS data contains `r n_raw` properties, of which `r n_with_pigs` have records of harvesting pigs. In total, there are `r n_raw_records` individuals records (rows) of data that span from `r min_date` to `r max_date`. We removed records for which there was no state identified, which leaves us with `r n_prop` potential properties to estimate density.
+
+There are `r n_1acre` properties with an area listed as 1 acre, which are dropped.
+
+```{r}
+#| label: farm-bill
+
+data_farm_bill <- read_csv("data/All_FB_Agreements_long_2024-05-30.csv")
+
+n_fb_prop <- length(unique(data_farm_bill$propertyID))
+
+farm_bill_properties <- data_farm_bill |> 
+  rename(AGRPROP_ID = propertyID) |> 
+  select(-agreement_name, -property_name) |> 
+  mutate(farm_bill = 1)
+
+with_fb <- dat.Agr2 |> 
+  left_join(farm_bill_properties)
+
+property_summary <- with_fb |>
+  select(AGRP_PRP_ID, AGRPROP_ID, ST_NAME, farm_bill) |> 
+  distinct() |> 
+  group_by(ST_NAME) |> 
+  summarise(`Total properties` = n(),
+            `Farm Bill properties` = sum(farm_bill, na.rm = TRUE)) |>
+  rename(State = ST_NAME)
+
+fb_only <- with_fb |> 
+  filter(farm_bill == 1) |> 
+  mutate(WT_WORK_DATE = dmy(WT_WORK_DATE))
+
+n_fb <- length(unique(fb_only$AGRP_PRP_ID))
+min_date <- min(fb_only$WT_WORK_DATE)
+max_date <- max(fb_only$WT_WORK_DATE)
+
+```
+
+As of 2024-05-30, there are `r n_fb_prop` total Farm Bill properties, of which `r n_fb` recorded pig harvesting. The Farm bill properties have records from `r min_date` to `r max_date`.
+
+{{< pagebreak >}}
+
+```{r}
+#| label: tbl-rawProps
+#| tbl-cap-location: bottom
+#| tbl-cap: "The number properties that recorded pig harvesting in each state"
+kable(property_summary)
+```
