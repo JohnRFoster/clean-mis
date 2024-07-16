@@ -41,7 +41,7 @@ message("Aerial Chronology")
 source("R/4.1.Generate.Aerial.Chronolgy.R")
 message("Aerial Chronology done")
 
-message("\Aerial Daily Events")
+message("\nAerial Daily Events")
 source("R/4.2.Generate.Aerial.Daily.Chronology.R")
 message("Aerial Daily Events done")
 
@@ -49,10 +49,10 @@ message("Aerial Daily Events done")
 
 message("\n\n=============      Snare      =============")
 message("Snare Chronology")
-# source("R/4.1.Generate.Aerial.Chronolgy.R")
+source("R/5.1.Generate.Snare.Chronolgy.R")
 message("Snare Chronology done")
 
-message("\Aerial Daily Events")
+message("\nSnare Daily Events")
 source("R/5.2.Generate.Snare.Daily.Events.Chronology.R")
 message("Snare Daily Events done")
 
