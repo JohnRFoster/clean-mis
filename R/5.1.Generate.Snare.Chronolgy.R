@@ -240,9 +240,9 @@ date.lut <- calc.event.length(trap.harvest.chronology)
 
 ##----REMOVE Unreliable Data----
 poor.dat <- date.lut[date.lut$information.quaility<0.15,c("AGRP_PRP_ID","unk.prp.event.id","ALWS_AGRPROP_ID")]
-poor.dat$Drop.Flag <- 1
 
 if(nrow(poor.dat)>0){
+  poor.dat$Drop.Flag <- 1
   trap.harvest.chronology<-merge(trap.harvest.chronology,poor.dat,by=c("AGRP_PRP_ID","unk.prp.event.id","ALWS_AGRPROP_ID"),all.x=TRUE)
 
   trap.harvest.chronology<-trap.harvest.chronology[is.na(trap.harvest.chronology$Drop.Flag),]
