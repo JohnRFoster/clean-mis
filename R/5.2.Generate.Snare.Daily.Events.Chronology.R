@@ -136,20 +136,20 @@ write.csv(final.agg.out.dat, file.path(write.path,paste0("feral.swine.effort.tak
 
 
 ##---- MAKE PLOTS ----
-par(mfrow=c(2,2))
-
-hist(final.agg.out.dat$Take, xlab="Take", breaks=20,main=NULL)
-
-summary(final.agg.out.dat$Take)
-
-plot(log(final.agg.out.dat$TOTAL.LAND),final.agg.out.dat$Take,xlab="log Property Size",ylab="Take")
-plot(log(final.agg.out.dat$TOTAL.LAND),log(final.agg.out.dat$trap.nights),xlab="log Property Size",ylab="log Trap Nights")
-abline(a=0,b=1,col="red")
-#plot(log(final.agg.out.dat$TOTAL.LAND),final.agg.out.dat$event.length,xlab="log Property Size",ylab="Event Length")
-plot(log(final.agg.out.dat$trap.nights),log(final.agg.out.dat$Take),xlab="log Trap Nights",ylab="log Take")
-abline(a=0,b=1,col="red")
-
-
-plot(final.agg.out.dat$event.length,final.agg.out.dat$Take)
+# par(mfrow=c(2,2))
+#
+# hist(final.agg.out.dat$Take, xlab="Take", breaks=20,main=NULL)
+#
+# summary(final.agg.out.dat$Take)
+#
+# plot(log(final.agg.out.dat$TOTAL.LAND),final.agg.out.dat$Take,xlab="log Property Size",ylab="Take")
+# plot(log(final.agg.out.dat$TOTAL.LAND),log(final.agg.out.dat$trap.nights),xlab="log Property Size",ylab="log Trap Nights")
+# abline(a=0,b=1,col="red")
+# #plot(log(final.agg.out.dat$TOTAL.LAND),final.agg.out.dat$event.length,xlab="log Property Size",ylab="Event Length")
+# plot(log(final.agg.out.dat$trap.nights),log(final.agg.out.dat$Take),xlab="log Trap Nights",ylab="log Take")
+# abline(a=0,b=1,col="red")
+#
+#
+# plot(final.agg.out.dat$event.length,final.agg.out.dat$Take)
 
 
