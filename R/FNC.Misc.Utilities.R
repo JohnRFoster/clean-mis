@@ -62,7 +62,7 @@ alter.column.names <- function(dat){
 #----FNC Calculate days elapsed since last record
 calc.days.between.records <- function(in.dat){
 
-  property.vec<-unique(in.dat[,"AGRP_PRP_ID"])
+  property.vec<-unique(in.dat$AGRP_PRP_ID)
 
   pb <- txtProgressBar(min = 0, max = length(property.vec), style = 3)
 
@@ -72,7 +72,7 @@ calc.days.between.records <- function(in.dat){
 
     day.diff.vec<-vector()
     if(nrow(tmp)>1){
-      for(i in 2:nrow(tmp)){day.diff.vec[i]<-tmp[i,"WT_WORK_DATE"]-tmp[i-1,"WT_WORK_DATE"]}
+      for(i in 2:nrow(tmp)){day.diff.vec[i]<-tmp$WT_WORK_DATE[i]-tmp$WT_WORK_DATE[i-1]}
     }
 
     if(length(day.diff.vec)>0){
@@ -84,10 +84,8 @@ calc.days.between.records <- function(in.dat){
 
     in.dat[in.dat$AGRP_PRP_ID==property.vec[k],"day.diff"] <-day.diff.vec
     #print(paste0(round( (k/length(property.vec))*100,digits=1), " %"))
+    setTxtProgressBar(pb, k)
   }#END Loop
-
-  setTxtProgressBar(pb, k)
-
   return(in.dat)
 }#END FUNCTION
 
