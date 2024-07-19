@@ -178,7 +178,7 @@ make.property.lut<-function(dat.Agr){
   dat.Agr[dat.Agr$PRPS_PROP_TYPE %in% fed.land.vec,"PRPS_PROP_TYPE"] <- "FEDERAL LAND"
 
   #Aggregate properties with same AGRP_PRP_ID
-  tmp<-aggregate(as.numeric(PRPS_QTY)~AGRP_PRP_ID+ALWS_AGRPROP_ID+ST_NAME+CNTY_NAME+ST_GSA_STATE_CD+CNTY_GSA_CNTY_CD+PRPS_PROP_TYPE, data=dat.Agr, FUN=sum, na.action = na.pass)
+  tmp<-aggregate(as.numeric(PRPS_QTY)~AGRP_PRP_ID+ALWS_AGRPROP_ID+ST_NAME+CNTY_NAME+ST_GSA_STATE_CD+CNTY_GSA_CNTY_CD+PRPS_PROP_TYPE, data=dat.Agr, FUN=max, na.action = na.pass)
   colnames(tmp)[ncol(tmp)]<-"PRPS_QTY"
   lut.property.acres <- spread(tmp, PRPS_PROP_TYPE, PRPS_QTY)
   #lut.property.acres <- lut.property.acres[ , -which(names(lut.property.acres) %in% c("V1"))]
@@ -187,7 +187,7 @@ make.property.lut<-function(dat.Agr){
 
   #colnames(lut.property.acres)<-c("AGRP_PRP_ID","ALWS_AGRPROP_ID","ST_NAME","CNTY_NAME","ST_FIPS","CNTY_FIPS","COUNTY.OR.CITY.LAND","FEDERAL.LAND", "MILITARY.LAND","PRIVATE.LAND","STATE.LAND","TRIBAL.LAND","UNKNOWN")
 
-  lut.property.acres$TOTAL.LAND <- rowSums(lut.property.acres[,c("FEDERAL.LAND","COUNTY.OR.CITY.LAND","MILITARY.LAND","PRIVATE.LAND","STATE.LAND","TRIBAL.LAND")],na.rm=TRUE)
+  lut.property.acres$TOTAL.LAND <- rowSums(lut.property.acres[,grepl("LAND", colnames(lut.property.acres))], na.rm = TRUE)
 
   ##--Add FIPS Codes--
 
