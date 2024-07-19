@@ -21,7 +21,7 @@ county_areas <- county_areas |>
   filter(LND110210D == max(LND110210D)) |>
   ungroup() |>
   select(Areaname, STCOU, LND110210D) |>
-  rename(FIPS = STCOU) |>
+  dplyr::rename(FIPS = STCOU) |>
   select(Areaname, FIPS) |>
   separate(Areaname, c("CNTY_NAME", "ST_ABBR"), sep = ", ") |>
   distinct()
@@ -36,7 +36,7 @@ all_county_info <- left_join(county_areas, state_abbr) |>
 all_properties <- read_csv(paste0("data/processed/processed_fs_national_property_", pull.date, ".csv"))
 all_properties <- all_properties |>
   select(AGRP_PRP_ID, ALWS_AGRPROP_ID, PRPS_QTY, ST_NAME, CNTY_NAME) |>
-  rename(TOTAL.LAND = PRPS_QTY) |>
+  dplyr::rename(TOTAL.LAND = PRPS_QTY) |>
   distinct()
 
 propertyFIPS <- left_join(all_properties, all_county_info) |>
