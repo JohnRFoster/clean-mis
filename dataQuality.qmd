@@ -28,6 +28,7 @@ source("R/FNC.MIS.Pre.Process.R")
 
 #----get correct data pull----
 pull.date <- config::get("pull.date")
+pull.date.ymd <- dmy(pull.date)
 
 #---- read path ----
 read.path <- "data/raw"
@@ -39,16 +40,22 @@ processed <- "processed_"
 #--Property Data
 csv.name <- paste0("fs_national_take_by_property_", pull.date, ".csv")
 file.name <- file.path(read.path, csv.name)
-df <- read_csv(file.name)
+df <- read.csv(file.name, stringsAsFactors = FALSE) 
 dat.Agr.take <- df |>
+  as_tibble() |> 
   distinct() |>
   select(-PRPS_QTY) |>
   mutate(AGRPROP_ID = WT_AGRPROP_ID)
 
+n_raw_records <- nrow(dat.Agr.take)
+min_date <- min(dmy(dat.Agr.take$WT_WORK_DATE))
+max_date <- max(dmy(dat.Agr.take$WT_WORK_DATE))
+
 csv.name <- paste0("fs_national_property_", pull.date, ".csv")
 file.name <- file.path(read.path, csv.name)
-df <- read_csv(file.name)
+df <- read.csv(file.name, stringsAsFactors = FALSE)
 dat.Agr.property <- df |>
+  as_tibble() |> 
   distinct() |>
   group_by(AGRP_PRP_ID, ALWS_AGRPROP_ID, ALWS_DA_ID, PRP_NAME, ST_NAME, 
            ST_GSA_STATE_CD, CNTY_NAME, CNTY_GSA_CNTY_CD, PRPS_PROP_TYPE) |>
@@ -56,84 +63,617 @@ dat.Agr.property <- df |>
   ungroup() |>
   mutate(AGRPROP_ID = ALWS_AGRPROP_ID)
 
-n_raw <- length(unique(dat.Agr.property$AGRP_PRP_ID))
-n_with_pigs <- length(unique(dat.Agr.take$AGRP_PRP_ID))
+data_farm_bill <- read_csv("data/All_FB_Agreements_long_2024-05-30.csv")
+
+farm_bill_properties <- data_farm_bill |> 
+  rename(ALWS_AGRPROP_ID = propertyID) |> 
+  select(-agreement_name, -property_name) |> 
+  mutate(farm_bill = 1)
 
 dat.Agr <- left_join(dat.Agr.take, dat.Agr.property)
+dat.Agr <- left_join(dat.Agr, farm_bill_properties)
+dat.Agr <- dat.Agr |> 
+  mutate(propertyID = paste0(AGRP_PRP_ID, "-", WT_AGRPROP_ID))
 
-# the number of properties that have an area listed as 1 acre
-n_1acre <- dat.Agr |> 
-  filter(PRPS_QTY == 1) |> 
-  nrow()
+n_with_pigs <- length(unique(dat.Agr$propertyID))
 
-# the number of properties that have missing area information
-n_na_area <- dat.Agr |> 
-  filter(is.na(PRPS_QTY)) |> 
-  nrow()
+n_farm1 <- dat.Agr |> 
+  filter(farm_bill == 1) |> 
+  pull(propertyID) |> 
+  unique() |> 
+  length()
 
+n_no_state <- dat.Agr |> 
+  filter(is.na(ST_GSA_STATE_CD)) |> 
+  pull(propertyID) |> 
+  unique() |> 
+  length()
 
-
-n_raw_records <- nrow(dat.Agr.take)
-min_date <- min(dmy(dat.Agr$WT_WORK_DATE))
-max_date <- max(dmy(dat.Agr$WT_WORK_DATE))
+loss_1 <- round(n_no_state / n_with_pigs * 100, 2)
 
 dat.Agr2 <- dat.Agr[complete.cases(dat.Agr$ST_GSA_STATE_CD),]
-n_prop <- length(unique(dat.Agr2$AGRP_PRP_ID))
 
-dat.Agr4 <- dat.Agr2[dat.Agr2$DA_NAME=="SWINE, FERAL",]
-lut.property.acres <- make.property.lut(dat.Agr4)
-lut.property.acres <- lut.property.acres[lut.property.acres$TOTAL.LAND > 0, ]
+# the number of properties that have an area listed as 1 acre
+n_1acre <- dat.Agr2 |> 
+  filter(PRPS_QTY == 1) |>
+  pull(propertyID) |> 
+  unique() |> 
+  length()
 
-n_prop_not0 <- length(unique(lut.property.acres$AGRP_PRP_ID))
+dat.Agr2 <- dat.Agr2 |> 
+  filter(PRPS_QTY != 1)
 
+loss_2 <- round(n_1acre / n_with_pigs * 100, 2)
+
+n_possible <- n_with_pigs - n_no_state - n_1acre
+
+good_props <- dat.Agr |> 
+  filter(farm_bill == 1,
+         !is.na(ST_GSA_STATE_CD),
+         PRPS_QTY > 1) |> 
+  pull(propertyID) |> 
+  unique() 
+
+n_farm2 <- length(good_props)
+
+```
+
+The latest MIS data was pulled on `r pull.date.ymd`, includes `r n_raw_records` individual records (rows) of data, and spans from `r min_date` to `r max_date`. This raw (unprocessed) data contains `r n_with_pigs` properties, which includes `r n_farm1` Farm Bill properties.
+
+We had to remove an initial set of properties because:
+
+* There was no state identified for `r n_no_state` properties. These properties are located in US territories (Guam, Puerto Rico, and the Virgin Islands).
+
+  * This represents a `r loss_1`% loss in the number of properties.
+
+* `r n_1acre` properties were removed because their size was recorded as 1 acre (which was considered a data entry error).
+
+  + This represents a `r loss_2`% loss in the number of properties.
+  
+That leaves `r n_possible` potential properties to estimate density, which includes `r n_farm2` Farm Bill properties. The following figures illustrate how these unprocessed data are distributed across states and time. What the data look like after cleaning/processing will be in the next section.
+
+
+```{r}
+#| label: fig-eventsPerProperty
+#| fig-cap: "The distribution of how many pig removal events were recorded in each property."
+df_events <- dat.Agr2 |>
+  count(propertyID) |> 
+  mutate(subset = "All properties")
+
+df_events2 <- dat.Agr2 |>
+  filter(farm_bill == 1) |> 
+  count(propertyID) |> 
+  mutate(subset = "Farm Bill properties")
+
+my_theme <- function(s = 12){
+  theme(
+    title = element_text(size = s + 4),
+    strip.text = element_text(size = s + 2),
+    axis.title = element_text(size = s + 2),
+    axis.text = element_text(size = s)
+  )
+}
+
+rbind(df_events, df_events2) |> 
+  ggplot() +
+  aes(x = n) +
+  geom_histogram(bins = 1500) +
+  coord_cartesian(xlim = c(0, 200)) +
+  labs(x = "Number of removal events",
+       y = "Number of properties") +
+  facet_wrap(~ subset) + 
+  theme_bw() +
+  my_theme()
+
+
+all_q1 <- round(quantile(df_events$n, 0.25))
+all_q3 <- round(quantile(df_events$n, 0.75))
+fb_q1 <- round(quantile(df_events2$n, 0.25))
+fb_q3 <- round(quantile(df_events2$n, 0.75))
+
+```
+
+We can see that the most common number of pig removal events recorded at a property is one, which is also true for the Farm Bill properties. However, 50% of all properties record between `r all_q1` and `r all_q3` events, while 50% of the Farm Bill properties record between `r fb_q1` and `r fb_q3` events.
+
+
+```{r}
+#| label: fig-eventsPerState
+#| fig-cap: "The total number of pig removal events that were recorded in each state."
+
+thresh <- 15
+df_events <- dat.Agr2 |>
+  count(ST_NAME) |> 
+  filter(n > thresh) |>
+  mutate(subset = "All properties") 
+
+df_events2 <- dat.Agr2 |>
+  filter(farm_bill == 1) |> 
+  count(ST_NAME) |>
+  filter(n > thresh) |>
+  mutate(subset = "Farm Bill properties")
+
+bind_rows(df_events, df_events2) |> 
+  ggplot() +
+  aes(y = reorder(ST_NAME, -n), x = n) +
+  geom_col() +
+  facet_wrap(~ subset) +
+  labs(x = "Number of removal events",
+       y = "") +
+  scale_x_continuous(breaks = seq(0, 100000, length.out = 3)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5)) +
+  my_theme(10) +
+  theme(axis.text.y = element_text(size = 10))
+
+low_states <- dat.Agr2 |>
+  count(ST_NAME) |> 
+  filter(n <= thresh) |> 
+  pull(ST_NAME)
 
 
 ```
 
-The raw (unprocessed) MIS data contains `r n_raw` properties, of which `r n_with_pigs` have records of harvesting pigs. In total, there are `r n_raw_records` individuals records (rows) of data that span from `r min_date` to `r max_date`. We removed records for which there was no state identified, which leaves us with `r n_prop` potential properties to estimate density.
 
-There are `r n_1acre` properties with an area listed as 1 acre, which are dropped.
+
+Note that the following states had less than `r thresh` properties and were left off the graph for visualization purposes: `r low_states`
+
+Texas has the most number of events recorded in the MIS data by far. However, when looking at the Farm Bill properties the distribution across states is more even, with Texas and Louisiana having the most removal events.
+
 
 ```{r}
-#| label: farm-bill
+#| label: fig-propertiesPerState
+#| fig-cap: "The total number of properties with pig removal events that were recorded in each state."
+
+thresh <- 10
+df_events_p <- dat.Agr2 |>
+  select(ST_NAME, propertyID) |>
+  distinct() |> 
+  count(ST_NAME) |> 
+  filter(n > thresh) |>
+  mutate(subset = "All properties") 
+
+df_events_p2 <- dat.Agr2 |>
+  filter(farm_bill == 1) |> 
+  select(ST_NAME, propertyID) |>
+  distinct() |> 
+  count(ST_NAME) |> 
+  filter(n > thresh) |>
+  mutate(subset = "Farm Bill properties") 
+
+df <- bind_rows(df_events_p, df_events_p2) 
+
+df |> 
+  ggplot() +
+  aes(y = reorder(ST_NAME, -n), x = n) +
+  geom_col() +
+  facet_wrap(~ subset) +
+  labs(x = "Number of properties",
+       y = "") +
+  theme_bw() +
+  my_theme(10) +
+  theme(axis.text.y = element_text(size = 10))
+
+low_states <- dat.Agr2 |>
+ select(ST_NAME, propertyID) |>
+  distinct() |> 
+  count(ST_NAME) |> 
+  filter(n <= thresh) |> 
+  pull(ST_NAME)
+
+```
+
+
+The following states had less than `r thresh` properties and were left off the graph for visualization purposes: `r low_states`
+
+Like with the number of events, Texas has the most number of properties recorded in the MIS data. However, when looking at the Farm Bill properties the distribution across states is more even.
+
+
+```{r}
+#| label: fig-timeseries
+#| fig-cap: "The total number of pig removal events that were recorded in each calendar month."
+
+df1 <- dat.Agr2 |> 
+  mutate(time = dmy(WT_WORK_DATE),
+         month = month(time),
+         year = year(time),
+         yrm = paste0(year, "-", month)) |> 
+  group_by(yrm) |>
+  count() |> 
+  ungroup() |> 
+  mutate(yrm2 = ym(yrm),
+         subset = "All properties")
+
+df2 <- dat.Agr2 |> 
+  filter(farm_bill == 1) |> 
+  mutate(time = dmy(WT_WORK_DATE),
+         month = month(time),
+         year = year(time),
+         yrm = paste0(year, "-", month)) |> 
+  group_by(yrm) |>
+  count() |> 
+  ungroup() |> 
+  mutate(yrm2 = ym(yrm),
+         subset = "Farm Bill properties")
+
+bind_rows(df1, df2) |> 
+  ggplot() +
+  aes(x = yrm2, y = n) +
+  geom_point() +
+  labs(x = "Date", 
+       y = "Number of events per calender month") +
+  facet_wrap(~ subset) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.6)) +
+  my_theme()
+```
+
+Across the entire time series, the general trend is an increase in the number of removal events through time, and this is largely driven by the fast increase in the number of events recorded in Farm Bill properties.
+
+
+{{< pagebreak >}}
+
+## MIS Data Processing
+
+Now we will walk through how the MIS data is processed/cleaned into a data set that is useful for modeling. 
+
+
+```{r}
+#| label: method filter
+
+trap.vec <- c("TRAPS, LIVE, FERAL HOGS","TRAPS, CAGE","TRAPS, CORRAL", "RAMIK MINI BARS :HI-9 (ANTICOAG)","TRAPS, SNAP (RAT, MOUSE, ETC.)")
+firearm.vec <- c("SPOTLIGHT","CALLING DEVICE, MANUAL(HAND,BLOWN)","NIGHT VISION/INFRARED EQUIPMENT","CALLING DEVICE, ELECTRONIC","BAIT STATION","MONITORING CAMERA","CAR/TRUCK","TELEMETRY EQUIPMENT","BAIT STATION", "FIREARMS")
+aerial.vec <- c("HELICOPTER","FIXED WING")
+snare.vec <- c("SNARES, NECK","SNARES, FOOT/LEG","TRAPS, FOOTHOLD","TRAPS, BODY GRIP","SNARES, NECK MECHANICAL (COLLARUM)","TRAPS, FOOTHOLD (PADDED)","TRAPS, FOOTHOLD DOG PROOF")
+
+all_methods <- c(trap.vec, firearm.vec, aerial.vec, snare.vec)
+
+methods <- unique(dat.Agr.take$CMP_NAME)
+n_methods <- length(methods)
+
+dat.Eff2 <- dat.Agr2 |>   
+  filter(CMP_NAME %in% all_methods)
+
+n_prop_known_method <- length(unique(dat.Eff2$propertyID))
+n_prop_known_method_fb <- dat.Eff2 |> 
+  filter(farm_bill == 1) |> 
+  pull(propertyID) |> 
+  unique() |> 
+  length()
+
+method_loss <- round((n_possible - n_prop_known_method) / n_possible * 100, 2)
+method_loss_fb <- round((n_farm2 - n_prop_known_method_fb) / n_farm2 * 100, 2)
 
 data_farm_bill <- read_csv("data/All_FB_Agreements_long_2024-05-30.csv")
 
 n_fb_prop <- length(unique(data_farm_bill$propertyID))
 
 farm_bill_properties <- data_farm_bill |> 
-  rename(AGRPROP_ID = propertyID) |> 
+  rename(alws_agrprop_id = propertyID) |> 
   select(-agreement_name, -property_name) |> 
   mutate(farm_bill = 1)
 
-with_fb <- dat.Agr2 |> 
+csv.name <- paste0("MIS.Effort.Take.All.Methods.Daily.Events.", pull.date, ".csv")
+file.name <- file.path("data/processed", csv.name)
+dat_mis <- read_csv(file.name) |> 
+  mutate(propertyID = paste0(agrp_prp_id, "-", alws_agrprop_id))
+
+with_fb <- dat_mis |> 
   left_join(farm_bill_properties)
 
-property_summary <- with_fb |>
-  select(AGRP_PRP_ID, AGRPROP_ID, ST_NAME, farm_bill) |> 
-  distinct() |> 
-  group_by(ST_NAME) |> 
-  summarise(`Total properties` = n(),
-            `Farm Bill properties` = sum(farm_bill, na.rm = TRUE)) |>
-  rename(State = ST_NAME)
+n_processed <- length(unique(with_fb$propertyID))
+process_left <- round(n_processed / n_possible * 100, 2)
 
 fb_only <- with_fb |> 
-  filter(farm_bill == 1) |> 
-  mutate(WT_WORK_DATE = dmy(WT_WORK_DATE))
+  filter(farm_bill == 1) 
 
-n_fb <- length(unique(fb_only$AGRP_PRP_ID))
-min_date <- min(fb_only$WT_WORK_DATE)
-max_date <- max(fb_only$WT_WORK_DATE)
+n_fb <- length(unique(fb_only$propertyID))
+fb_left <- 100 - round(n_fb / n_prop_known_method_fb * 100, 2)
+
+```
+In the MIS data, there are `r n_methods` unique methods of pig harvesting recorded. However, we are only interested in records that can be classified as on of these five: 
+
+1. firearms (e.g. hunting)
+2. fixed wing aircraft
+3. helicopters
+4. snares
+5. traps 
+
+These method classes were chosen because their effort (how many units deployed for how many hours) can be easily standardized, which is required for density estimation. Therefore, we only use records that have a method recorded that can be matched to one of the five listed above. This winnows that data to `r n_prop_known_method` properties, which includes `r n_prop_known_method_fb` Farm Bill properties.
+
+- Subsetting that data to these five methods causes a loss of `r method_loss`% of total properties, and a loss of `r method_loss_fb`% of Farm Bill properties
+
+Then, for each method, there are a series of checks to determine whether or not a pig removal event should be kept, altered, or removed:
+
+- For traps and snares, removal events were dropped if we could not determine ff the trap/snare was checked or reset.
+
+- For traps and snares, events lasting longer than 90 trap nights were broken in to smaller events because it is unlikely that traps and snares were not reset during this time. After breaking up these events we checked again for traps/snares being left open or not reset.
+
+- For all records, effort data that was recorded as 0 or was missing was discarded. This includes method, number of units deployed, or search time.
+
+  - Absolute search times that were obviously too long (i.e. weeks) were treated as a data entry error and discarded.  
+
+After data processing, there are `r n_processed` total properties, which includes `r n_fb` Farm Bill properties.
+
+  - These properties represent `r process_left`% of all possible properties and `r fb_left`% of all Farm Bill properties. How these breakdown by state is presented in @fig-processed
+  
+{{< pagebreak >}}
+
+```{r}
+#| label: fig-processed
+#| fig-cap: "The number properties remaining in each state after data processing"
+
+thresh <- 10
+df_events_p <- with_fb |>
+  select(st_name, propertyID) |>
+  distinct() |> 
+  count(st_name) |> 
+  filter(n > thresh) |>
+  mutate(subset = "All properties") 
+
+df_events_p2 <- with_fb |>
+  filter(farm_bill == 1) |> 
+  select(st_name, propertyID) |>
+  distinct() |> 
+  count(st_name) |> 
+  filter(n > thresh) |>
+  mutate(subset = "Farm Bill properties") 
+
+df <- bind_rows(df_events_p, df_events_p2) 
+
+df |> 
+  ggplot() +
+  aes(y = reorder(st_name, -n), x = n) +
+  geom_col() +
+  facet_wrap(~ subset) +
+  labs(x = "Number of properties",
+       y = "") +
+  theme_bw() +
+  my_theme(10) +
+  scale_x_continuous(breaks = c(0, 2000, 4000)) +
+  theme(axis.text.y = element_text(size = 10))
+
+low_states <- with_fb |>
+ select(st_name, propertyID) |>
+  distinct() |> 
+  count(st_name) |>  
+  filter(n <= thresh) |> 
+  pull(st_name)
+
 
 ```
 
-As of 2024-05-30, there are `r n_fb_prop` total Farm Bill properties, of which `r n_fb` recorded pig harvesting. The Farm bill properties have records from `r min_date` to `r max_date`.
+The following states had less than `r thresh` properties and were left off the graph for visualization purposes: `r low_states`
+
+### Processed data to model data
+
+
+```{r}
+#| label: process model data
+#| results: hide
+
+source("../pigs-property/R/functions_data.R")
+library(targets)
+
+all_take <- dat_mis |>
+    filter(start.date >= lubridate::ymd("2014-01-01")) |>
+    mutate(cnty_name = if_else(grepl("ST ", cnty_name), gsub("ST ", "ST. ", cnty_name), cnty_name),
+           cnty_name = if_else(grepl("KERN", cnty_name), "KERN", cnty_name))
+
+data_mis <- all_take |>
+  mutate(property_area_km2 = property.size / 247.1) |>
+  filter(property_area_km2 >= 1.8,
+         st_name != "HAWAII") |>
+  mutate(effort = if_else(cmp_name %in% c("TRAPS, CAGE", "SNARE"), cmp.days, cmp.hours),
+         effort_per = effort / cmp.qty,
+         cmp_name = if_else(cmp_name == "TRAPS, CAGE", "TRAPS", cmp_name)) |>
+  rename(method = cmp_name,
+         trap_count = cmp.qty) |>
+  select(-wt_work_date, -hours, -cmp.hours, -cmp.days) |>
+  distinct() |>
+  mutate(propertyID = paste0(agrp_prp_id, "-", alws_agrprop_id)) |> 
+  arrange(agrp_prp_id, start.date, end.date)
+
+# create PP of length [interval]
+data_timestep <- create_primary_periods(data_mis, 4) |>
+  resolve_duplicate() |>         # resolve duplicate property areas
+  take_filter() |>               # remove properties with zero pigs taken
+  dynamic_filter() |>            # filter out bad events & properties
+  condition_first_capture() |>   # condition on first positive removal event for each property
+  dynamic_filter() |>            # filter out bad events & properties
+  order_interval() |>            # determine midpoints from start/end dates
+  order_stochastic() |>          # randomly order events
+  order_of_events() |>           # assign order number, check
+  county_codes()                 # county codes and renaming
+
+# now we have two columns for time
+# primary_period is how [interval] sequences are aligned across the data set
+# timestep is the sequence of primary periods within a property
+timestep_df <- create_timestep_df(data_timestep)
+
+data_pp <- left_join(data_timestep, timestep_df,
+                     by = join_by(propertyID, primary_period)) |>
+  mutate(primary_period = primary_period - min(primary_period) + 1) |> 
+  left_join(farm_bill_properties)
+
+n_final_props <- length(unique(data_pp$propertyID))
+n_final_props_fb <- data_pp |> 
+  filter(farm_bill == 1) |> 
+  pull(propertyID) |> 
+  unique() |> 
+  length()
+
+
+per_left_final <- round(n_final_props / n_possible * 100, 2)
+per_left_final_fb <- round(n_final_props_fb / n_farm2 * 100, 2)
+
+```
+
+The final set of processing involves selecting properties that meet the minimum criteria for density estimation using a removal model.
+
+  1. The time series is broken into 4-week chunks, or primary periods, and a primary period must have at least two removal events within it. I.e. any primary period with one event was discarded.
+  
+  2. We condition on first positive capture. I.e. within a property, we drop all primary periods at the beginning of a property's time series that have 0 total pigs removed. 
+  
+  3. With bad primary periods removed, a property must have at least two good primary periods in its time series. 
+  
+  4. We restricted the analysis from 2014-01-01 to present.
+  
+  
+After this processing we are left with:
+
+- `r n_final_props` properties (`r per_left_final`% of possible properties in MIS)
+- `r n_final_props_fb` Farm Bill properties (`r per_left_final_fb`% of possible Farm Bill properties in MIS)
+
+Below are the same figures from above (the raw MIS data), but now using the data suitable for modeling. 
+
+```{r}
+#| label: fig-eventsPerPropertyFinal
+#| fig-cap: "The distribution of removal events in each property in the final data"
+df_events <- data_pp |>
+  count(agrp_prp_id) |> 
+  mutate(subset = "All properties")
+
+df_events2 <- data_pp |>
+  filter(farm_bill == 1) |> 
+  count(agrp_prp_id) |> 
+  mutate(subset = "Farm Bill properties")
+
+rbind(df_events, df_events2) |> 
+  ggplot() +
+  aes(x = n) +
+  geom_histogram(bins = 1500) +
+  coord_cartesian(xlim = c(0, 200)) +
+  labs(x = "Number of removal events",
+       y = "Number of properties") +
+  facet_wrap(~ subset) + 
+  theme_bw() +
+  my_theme()
+```
+
+
+{{< pagebreak >}}
+
+
+```{r}
+#| label: fig-eventsPerStateFinal
+#| fig-cap: "The total number of pig removal events that were recorded in each state in the final data set. All states shown."
+
+thresh <- 0
+df_events <- data_pp |>
+  count(st_name) |> 
+  filter(n > thresh) |>
+  mutate(subset = "All properties") 
+
+df_events2 <- data_pp |>
+  filter(farm_bill == 1) |> 
+  count(st_name) |>
+  filter(n > thresh) |>
+  mutate(subset = "Farm Bill properties")
+
+bind_rows(df_events, df_events2) |> 
+  ggplot() +
+  aes(y = reorder(st_name, -n), x = n) +
+  geom_col() +
+  facet_wrap(~ subset) +
+  labs(x = "Number of removal events",
+       y = "") +
+  scale_x_continuous(breaks = seq(0, 50000, length.out = 3)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5)) +
+  my_theme(10) +
+  theme(axis.text.y = element_text(size = 10))
+```
+
+{{< pagebreak >}}
+
+
+```{r}
+#| label: fig-propertiesPerStateFinal
+#| fig-cap: "The total number of properties with pig removal events that were recorded in each state in the final data set. All state shown."
+
+df_events_p <- data_pp |>
+  select(st_name, agrp_prp_id) |>
+  distinct() |> 
+  count(st_name) |> 
+  filter(n > thresh) |>
+  mutate(subset = "All properties") 
+
+df_events_p2 <- data_pp |>
+  filter(farm_bill == 1) |> 
+  select(st_name, agrp_prp_id) |>
+  distinct() |> 
+  count(st_name) |> 
+  filter(n > thresh) |>
+  mutate(subset = "Farm Bill properties") 
+
+df <- bind_rows(df_events_p, df_events_p2) 
+
+df |> 
+  ggplot() +
+  aes(y = reorder(st_name, -n), x = n) +
+  geom_col() +
+  facet_wrap(~ subset) +
+  labs(x = "Number of properties",
+       y = "") +
+  theme_bw() +
+  my_theme(10) +
+  theme(axis.text.y = element_text(size = 10))
+
+```
+
 
 {{< pagebreak >}}
 
 ```{r}
-#| label: tbl-rawProps
-#| tbl-cap-location: bottom
-#| tbl-cap: "The number properties that recorded pig harvesting in each state"
-kable(property_summary)
+#| label: fig-timeseriesFinal
+#| fig-cap: "The total number of pig removal events that were recorded in each calendar month in the final data set."
+
+
+end_dates <- unique(sort(data_mis$end.date))
+min_date <- min(end_dates)
+max_date <- max(end_dates)
+
+start_dates <- seq(min_date, max_date, by = paste(4, "week"))
+end_dates <- c(start_dates[-1] - 1, max_date)
+
+targets::tar_assert_identical(length(start_dates), length(end_dates))
+targets::tar_assert_true(min(df$start.date) >= min_date)
+targets::tar_assert_true(max(df$start.date) <= max_date)
+
+timestep_df <- tibble(start_dates, end_dates) |>
+  mutate(primary_period = 1:n())
+timestep_df$month <- month(timestep_df$end_dates)
+timestep_df$year <- year(timestep_df$end_dates)
+
+df_with_dates <- left_join(data_pp, timestep_df)
+
+df1 <- df_with_dates |> 
+  mutate(yrm = paste0(year, "-", month)) |> 
+  group_by(yrm) |>
+  count() |> 
+  ungroup() |> 
+  mutate(yrm2 = ym(yrm),
+         subset = "All properties")
+
+df2 <- df_with_dates |> 
+  filter(farm_bill == 1) |> 
+  mutate(yrm = paste0(year, "-", month)) |> 
+  group_by(yrm) |>
+  count() |> 
+  ungroup() |> 
+  mutate(yrm2 = ym(yrm),
+         subset = "Farm Bill properties")
+
+bind_rows(df1, df2) |> 
+  ggplot() +
+  aes(x = yrm2, y = n) +
+  geom_point() +
+  labs(x = "Date", 
+       y = "Number of events per calender month") +
+  facet_wrap(~ subset) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.6)) +
+  my_theme()
 ```
+
+
