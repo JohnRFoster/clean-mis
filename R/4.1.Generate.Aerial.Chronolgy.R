@@ -158,6 +158,8 @@ nrow(final.agg.out.dat)
 
 #Remove those with no FIPS Code thus no area values
 final.agg.out.dat <- check.all.properties(final.agg.out.dat)
+nrow(final.agg.out.dat)
+
 final.agg.out.dat<-final.agg.out.dat[is.na(final.agg.out.dat$FIPS)==FALSE,]
 nrow(final.agg.out.dat)
 
