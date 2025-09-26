@@ -25,6 +25,10 @@ library(ggplot2)
 library(lubridate)
 library(knitr)
 
+knit_hooks$set(inline = function(x) {
+  prettyNum(x, big.mark=",")
+})
+
 #----Required Functions
 source("../pigs-property/R/functions_data.R")
 source("R/FNC.Misc.Utilities.R")
@@ -117,11 +121,18 @@ good_props <- dat.Agr |>
   pull(propertyID) |> 
   unique() 
 
-n_farm2 <- length(good_props)
-
-
 dat.Eff <- read_csv(file.path(write.path, paste0("processed_fs_national_effort_", pull.date, ".csv")))
 dat.Agr <- read_csv(file.path(write.path, paste0("processed_fs_national_property_", pull.date, ".csv")))
+
+dat.Agr <- left_join(dat.Agr, farm_bill_properties)
+dat.Agr <- dat.Agr |> 
+  mutate(propertyID = paste0(AGRP_PRP_ID, "-", WT_AGRPROP_ID))
+
+n_farm2 <- dat.Agr |> 
+  filter(farm_bill == 1) |> 
+  pull(propertyID) |> 
+  unique() |> 
+  length()
 
 get_numbers <- function(df_raw, df_processed){
   out <- list()
@@ -157,15 +168,15 @@ trap.raw<-trap.dat[trap.dat$CMP_NAME %in% trap.vec,]
 traps.procesed <- read_csv(file.path(write.path, paste0("feral.swine.effort.take.trap.ALL.daily.events.",pull.date,".csv")))
 traps <- get_numbers(trap.raw, traps.procesed)
 
+percent_props_with_traps <- round(traps$n_props_raw / n_with_pigs * 100, 2)
+
 ```
 
-The latest MIS data was pulled on `r pull.date.ymd`, and spans from `r min_date` to `r max_date`. This raw (unprocessed) data contains `r n_with_pigs` properties, which includes `r n_farm1` Farm Bill properties.
-
-Data was processed separately for each removal method. Below is a summary for each removal method, and the main causes for dropping removal events.
+The latest MIS data was pulled on `r pull.date.ymd`, and spans from `r min_date` to `r max_date`. This raw (unprocessed) data contains `r n_with_pigs` properties, which includes `r n_farm1` Farm Bill properties. The raw data was processed separately for each removal method. Below is a summary for each method method removing errant data or data with incomplete information. After processing each method, there is a final processing step to create a data set that is suitable for density estimation.
   
 #### Traps
 
-- There are `r traps$n_rows_raw` records determined as trapping events, spread across `r traps$n_props_raw` properties.
+- There are `r traps$n_rows_raw` trapping events on `r traps$n_props_raw` properties.
 
 - We had to drop `r traps$n_rows_lost` records (`r traps$percent_rows_lost`%) because we could not determine effort (trap nights) due to data entry errors. This was mostly due to implausible combinations of hours spent trapping, the number of traps set, and/or the number of traps checked, removed, or unset. 
 
@@ -211,10 +222,9 @@ firearms <- get_numbers(firearms.associated, firearms.procesed)
 
 aerial.vec <- c("HELICOPTER","FIXED WING")
 tmp<-dat.Eff[dat.Eff$CMP_NAME %in% aerial.vec,]
-tmp<-tmp[tmp$UOM_NAME=="HOBBS METER",]
-tmp<-tmp[tmp$USET_NAME %not in% c("DISCHARGED"),]
 
 dat.aerial<-read.csv(file.path(write.path, paste0("feral.swine.effort.take.aerial.ALL.daily.",pull.date,".csv")))
+
 aerial <- get_numbers(tmp, dat.aerial)
 
 ```
@@ -223,7 +233,7 @@ aerial <- get_numbers(tmp, dat.aerial)
 
 - There are `r aerial$n_rows_raw` records determined as aerial hunting events (e.g. helicopters and fixed wing aircraft), spread across `r aerial$n_props_raw` properties.
 
-- We had to drop `r aerial$n_rows_lost` records (`r aerial$percent_rows_lost`%) because of data entry issues such as implausible number of aircraft flown, flight duration not recorded with a Hobbs meter, or the area of the property was not recorded.
+- We had to drop `r aerial$n_rows_lost` records (`r aerial$percent_rows_lost`%) because of data entry issues such as implausible number of aircraft flown, flight duration not recorded with a Hobbs meter, or the area of the property was not recorded or recorded as 1 acre.
 
   - This resulted in `r aerial$n_props_lost` properties (`r aerial$percent_props_lost`%) being dropped from the aerial data.
 
@@ -260,9 +270,26 @@ snare <- get_numbers(trap.dat, dat.snare)
 - We had to drop `r snare$n_rows_lost` records (`r snare$percent_rows_lost`%) because we could not determine effort (trap nights) due to data entry errors. This was mostly due to implausible combinations of hours spent snaring, the number of snares set, and/or the number of snares checked, removed, or unset. 
 
   - This resulted in `r snare$n_props_lost` properties (`r snare$percent_props_lost`%) being dropped from the trapping data.
+  
+  
+
+| Method   | Events                  | Properties               | Events                        |       Properties               | Events                          | Properties                       |
+|----------|-------------------------|--------------------------|-------------------------------|--------------------------------|---------------------------------|----------------------------------|
+| Traps    | `r traps$n_rows_raw`    | `r traps$n_props_raw`    | `r traps$n_rows_processed`    | `r traps$n_props_processed`    | `r traps$percent_rows_lost`%    | `r traps$percent_props_lost`%    |
+| Firearms | `r firearms$n_rows_raw` | `r firearms$n_props_raw` | `r firearms$n_rows_processed` | `r firearms$n_props_processed` | `r firearms$percent_rows_lost`% | `r firearms$percent_props_lost`% |
+| Aerial   | `r aerial$n_rows_raw`   | `r aerial$n_props_raw`   | `r aerial$n_rows_processed`   | `r aerial$n_props_processed`   | `r aerial$percent_rows_lost`%   | `r aerial$percent_props_lost`%   |
+| Snares   | `r snare$n_rows_raw`    | `r snare$n_props_raw`    | `r snare$n_rows_processed`    | `r snare$n_props_processed`    | `r snare$percent_rows_lost`%    | `r snare$percent_props_lost`%    |
+
+: One Table {#tbl-processedMIS tbl-colwidths="[20, 12, 15, 12, 15, 12, 15]"}
+
+
+
+
 
 ```{r}
 #| label: final
+#| results: hide
+
 source("../pigs-property/R/functions_data.R")
 library(targets)
 
@@ -284,7 +311,7 @@ with_fb <- dat_mis |>
   left_join(farm_bill_properties)
 
 n_processed <- length(unique(with_fb$propertyID))
-process_left <- round(n_processed / n_possible * 100, 2)
+process_left <- round(n_processed / n_with_pigs * 100, 2)
 
 fb_only <- with_fb |> 
   filter(farm_bill == 1) 
@@ -342,14 +369,19 @@ n_final_props_fb <- data_pp |>
   length()
 
 
-per_left_final <- round(n_final_props / n_possible * 100, 2)
-per_left_final_fb <- round(n_final_props_fb / n_farm2 * 100, 2)
+per_left_final <- round(n_final_props / n_with_pigs * 100, 2)
+per_left_final_fb <- round(n_final_props_fb / n_farm1 * 100, 2)
+
+
+
+
+
 
 ```
 
-After processing each method, there are `r n_processed` total properties, which includes `r n_fb` Farm Bill properties.
+After processing each method, there are `r n_processed` properties left, which includes `r n_fb` Farm Bill properties.
 
-  - These properties represent `r process_left`% of all possible properties and `r fb_left`% of all Farm Bill properties. How these breakdown by state is presented in @fig-processed
+  - These properties represent `r process_left`% of all possible properties and `r fb_left`% of all Farm Bill properties.
   
   The final set of processing involves selecting properties that meet the minimum criteria for density estimation using a removal model.
 
@@ -360,15 +392,18 @@ After processing each method, there are `r n_processed` total properties, which 
   3. With bad primary periods removed, a property must have at least two good primary periods in its time series. 
   
   4. We restricted the analysis from 2014-01-01 to present.
+
   
-  
-After this processing we are left with:
+After this final set of processing we are left with:
 
 - `r n_final_props` properties (`r per_left_final`% of possible properties in MIS)
 - `r n_final_props_fb` Farm Bill properties (`r per_left_final_fb`% of possible Farm Bill properties in MIS)
 
+In summary, the main cause of loss of information is data reporting issues related to effort and a property not having its area accurately recorded. For the effort data, the main issue is when traps and snares are marked as unchecked over long periods of time. This is most likely because they were checked, had 0 pigs in them, and then left open. This is problematic because we need to know when traps/snares were checked, even if 0 pigs were removed. Additionally, for the firearm data, a major issue is that the property ID was not recorded for hunting events.
 
-## MIS data overview
+Below are some exploratory figures. The first set, in MIS Data Overview, visualizes the raw data. Then, in Processed Data, the same set of figures but for the processed MIS data suitable for modeling. 
+
+## MIS Data Overview
 
 ```{r}
 #| label: fig-eventsPerProperty
@@ -402,16 +437,8 @@ rbind(df_events, df_events2) |>
   theme_bw() +
   my_theme()
 
-
-all_q1 <- round(quantile(df_events$n, 0.25))
-all_q3 <- round(quantile(df_events$n, 0.75))
-fb_q1 <- round(quantile(df_events2$n, 0.25))
-fb_q3 <- round(quantile(df_events2$n, 0.75))
-
 ```
-
-We can see that the most common number of pig removal events recorded at a property is one, which is also true for the Farm Bill properties. However, 50% of all properties record between `r all_q1` and `r all_q3` events, while 50% of the Farm Bill properties record between `r fb_q1` and `r fb_q3` events.
-
+{{< pagebreak >}}
 
 ```{r}
 #| label: fig-eventsPerState
@@ -454,8 +481,7 @@ low_states <- dat.Agr2 |>
 
 Note that the following states had less than `r thresh` properties and were left off the graph for visualization purposes: `r low_states`
 
-Texas has the most number of events recorded in the MIS data by far. However, when looking at the Farm Bill properties the distribution across states is more even, with Texas and Louisiana having the most removal events.
-
+{{< pagebreak >}}
 
 ```{r}
 #| label: fig-propertiesPerState
@@ -502,8 +528,7 @@ low_states <- dat.Agr2 |>
 
 The following states had less than `r thresh` properties and were left off the graph for visualization purposes: `r low_states`
 
-Like with the number of events, Texas has the most number of properties recorded in the MIS data. However, when looking at the Farm Bill properties the distribution across states is more even.
-
+{{< pagebreak >}}
 
 ```{r}
 #| label: fig-timeseries
@@ -543,248 +568,54 @@ bind_rows(df1, df2) |>
   theme(axis.text.x = element_text(angle = 90, vjust = 0.6)) +
   my_theme()
 ```
-
-Across the entire time series, the general trend is an increase in the number of removal events through time, and this is largely driven by the fast increase in the number of events recorded in Farm Bill properties.
-
-
-### Properties in MIS that can be modeled with confidence
-
-We conducted an extensive simulation study to determine which data qualities lead to confident density predictions. The simulation study included over 35000 properties with varying levels of take, property area, time series length, and number of observations.
-
-We assessed how each property did at predicting known density, and then pulled out the properties that meet the criteria of making confident prediction.
+{{< pagebreak >}}
 
 ```{r}
-#| label: metrics
+#| label: fig-timeseriesPropeties
+#| fig-cap: "The total number of properties that recorded removal events in each calendar month."
 
-thresh_mpe <- 50
-thresh_nrmse <- 1
-thresh_rmse <- 0.5
-thresh_bias <- 0.5
-
-```
-
-Those criteria are:
-
-  1. Mean percentage error less than or equal to `r thresh_mpe`%
-  
-  2. Normalized root mean squared error less than or equal to `r thresh_nrmse`
-  
-  3. Root mean squared error less than or equal to `r thresh_rmse` pigs per square km
-  
-  4. Mean bias +/- `r thresh_bias` pigs per square km
-  
-When we subset the simulated properties to those that meet the above criteria, we see that properties must have the characteristics in @tbl-confidentProperties.
-
-```{r}
-#| label: tbl-confidentProperties
-#| tbl-cap-location: bottom
-#| tbl-cap: "Property characteristics that lead to confident density predictions. Property area is the area of the property in square km. Total # pigs removed is the total number of pigs harvested in a property across all removal events. Total # removal events is the total number of individual removal events recorded at a property. Total # observed PPs is the total number of primary periods with at least two removal events. Time series length is the total number of primary periods a property's data spans. Proportion of time series observed is the proportion of the total number of primary periods a property's data spans that have removal events. Total effort is the sum total of hours spent searching, regardless of method, across all removal events. Total number of units deployed is the total number of units (traps, snares, helicopters, etc) that were deployed at a property across all removal events."
-
-acceptable_metrics <- read_csv("../pigs-simulation/analysis/betaSurvival_uniqueAreaTrapSnare/acceptable_metrics.csv")
-
-acceptable_metrics |> 
-  mutate(Metric = c("Property area (sq. km)", "Total # pigs removed", "Total # removal events", "Total # observed PPs", "Time series length", "Proportion of time series observed", "Total effort (hours)", "Total number of units deployed")) |> 
-  select(Metric, min, max) |> 
-  mutate(min = round(min, 3),
-         max = round(max)) |> 
-  kable()
-
-```
-
-```{r}
-#| label: simulation filter
-
-get_metric <- function(df, m, x){
-  tmp <- df |> filter(metric == m) |> pull(x)
-  if(x == "max") return(round(tmp))
-  if(x == "min") return(round(tmp, 2))
-}
-
-
-area_min <- get_metric(acceptable_metrics, "property_area", "min")
-area_max <- get_metric(acceptable_metrics, "property_area", "max")
-take_min <- get_metric(acceptable_metrics, "take", "min")
-take_max <- get_metric(acceptable_metrics, "take", "max")
-n_total_events_min <- get_metric(acceptable_metrics, "n_total_events", "min")
-n_total_events_max <- get_metric(acceptable_metrics, "n_total_events", "max")
-n_observed_pp_min <- get_metric(acceptable_metrics, "n_observed_pp", "min")
-n_observed_pp_max <- get_metric(acceptable_metrics, "n_observed_pp", "max")
-ts_length_min <- get_metric(acceptable_metrics, "ts_length", "min")
-ts_length_max <- get_metric(acceptable_metrics, "ts_length", "max")
-prop_obs_min <- get_metric(acceptable_metrics, "proportion_observed", "min")
-prop_obs_max <- get_metric(acceptable_metrics, "proportion_observed", "max")
-
-
-observed_pp <- dat.Agr2 |> 
+df1 <- dat.Agr2 |> 
   mutate(time = dmy(WT_WORK_DATE),
          month = month(time),
          year = year(time),
          yrm = paste0(year, "-", month)) |> 
-  select(propertyID, yrm) |>
-  distinct() |>
-  count(propertyID) |>
-  rename(n_observed_pp = n)
+  select(yrm, propertyID) |> 
+  distinct() |> 
+  group_by(yrm) |>
+  count() |> 
+  ungroup() |> 
+  mutate(yrm2 = ym(yrm),
+         subset = "All properties")
 
-
-ts_length <- dat.Agr2 |>
-  mutate(time = dmy(WT_WORK_DATE)) |>
-  select(propertyID, time) |>
-  distinct() |>
-  group_by(propertyID) |>
-  filter(time == min(time) |
-           time == max(time)) |>
-  arrange(propertyID, time) |>
-  mutate(ts_length = c(0, diff(time) + 1)) |>
-  ungroup() |>
-  filter(ts_length != 0) |> 
-  mutate(ts_length = floor(ts_length / 28)) |> 
-  select(-time)
-
-
-property_char <- dat.Agr2 |>
-  mutate(property_area_km2 = round(PRPS_QTY * 0.00404686, 2)) |>
-  group_by(propertyID, property_area_km2) |>
-  summarise(
-    take = sum(WKR_QTY),
-    n_total_events = n()
-  ) |>
-  ungroup() |>
-  left_join(ts_length) |>
-  left_join(observed_pp) |>
-  mutate(prop_observed = n_observed_pp / ts_length) |> 
-  filter(!is.na(ts_length))
-
-
-
-n_area <- property_char |>
-  filter(property_area_km2 >= area_min,
-         property_area_km2 <= area_max) |> 
-  nrow()
-n_area_per <- round(n_area / n_possible * 100)
-
-n_take <- property_char |>
-  filter(take >= take_min,
-         take <= take_max) |> 
-  nrow()
-n_take_per <- round(n_take / n_possible * 100)
-
-n_total_event <- property_char |>
-  filter(n_total_events >= n_total_events_min,
-         n_total_events <= n_total_events_max) |> 
-  nrow()
-n_total_event_per <- round(n_total_event / n_possible * 100)
-
-n_observed_pp <- property_char |>
-  filter(n_observed_pp >= n_observed_pp_min,
-         n_observed_pp <= n_observed_pp_max) |>
-  nrow()
-n_observed_pp_per <- round(n_observed_pp / n_possible * 100)
-
-n_ts_length <- property_char |>
-  filter(ts_length >= ts_length_min,
-         ts_length <= ts_length_max) |>
-  nrow()
-n_ts_length_per <- round(n_ts_length / n_possible * 100)
-
-n_prop_observed <- property_char |>
-  filter(prop_observed >= prop_obs_min) |>
-  nrow()
-n_prop_observed_per <- round(n_prop_observed / n_possible * 100)
-
-
-n_all <- property_char |>
-  filter(property_area_km2 >= area_min,
-         property_area_km2 <= area_max) |>
-  filter(take >= take_min,
-         take <= take_max) |>
-  filter(n_total_events >= n_total_events_min,
-         n_total_events <= n_total_events_max) |>
-  filter(n_observed_pp >= n_observed_pp_min,
-         n_observed_pp <= n_observed_pp_max) |>
-  filter(ts_length >= ts_length_min,
-         ts_length <= ts_length_max) |>
-  filter(prop_observed >= prop_obs_min) |>
-  nrow()
-n_all_per <- round(n_all / n_possible * 100)
-```
-
-
-The following number of properties meet the min/max criteria from @tbl-confidentProperties:
-
-  - `r n_area` (`r n_area_per`%) properties meet the area criteria
-  - `r n_take` (`r n_take_per`%) properties meet the take criteria
-  - `r n_total_event` (`r n_total_event_per`%) properties meet the total number of events criteria
-  - `r n_observed_pp` (`r n_observed_pp_per`%) properties meet the total number of observed primary period criteria
-  - `r n_ts_length` (`r n_ts_length_per`%) properties meet the time series length criteria
-  - `r n_prop_observed` (`r n_prop_observed_per`%) properties meet the proportion of primary periods observed criteria
-  - `r n_all` (`r n_all_per`%) properties meet all the criteria.
-
-It is important to note that the above filtering was completed on the unprocessed MIS data, which does not have standardized effort across methods or removal events placed into 4-week primary periods. As a proxy for primary periods I have grouped removal events by year-month.
-
-{{< pagebreak >}}
-
-## MIS Data Processing
-
-Now we will walk through how the MIS data is processed/cleaned into a data set that is useful for modeling. 
-
-
-```{r}
-#| label: method filter
-
-trap.vec <- c("TRAPS, LIVE, FERAL HOGS","TRAPS, CAGE","TRAPS, CORRAL", "RAMIK MINI BARS :HI-9 (ANTICOAG)","TRAPS, SNAP (RAT, MOUSE, ETC.)")
-firearm.vec <- c("SPOTLIGHT","CALLING DEVICE, MANUAL(HAND,BLOWN)","NIGHT VISION/INFRARED EQUIPMENT","CALLING DEVICE, ELECTRONIC","BAIT STATION","MONITORING CAMERA","CAR/TRUCK","TELEMETRY EQUIPMENT","BAIT STATION", "FIREARMS")
-aerial.vec <- c("HELICOPTER","FIXED WING")
-snare.vec <- c("SNARES, NECK","SNARES, FOOT/LEG","TRAPS, FOOTHOLD","TRAPS, BODY GRIP","SNARES, NECK MECHANICAL (COLLARUM)","TRAPS, FOOTHOLD (PADDED)","TRAPS, FOOTHOLD DOG PROOF")
-
-all_methods <- c(trap.vec, firearm.vec, aerial.vec, snare.vec)
-
-methods <- unique(dat.Agr.take$CMP_NAME)
-n_methods <- length(methods)
-
-dat.Eff2 <- dat.Agr2 |>   
-  filter(CMP_NAME %in% all_methods)
-
-n_prop_known_method <- length(unique(dat.Eff2$propertyID))
-n_prop_known_method_fb <- dat.Eff2 |> 
+df2 <- dat.Agr2 |> 
   filter(farm_bill == 1) |> 
-  pull(propertyID) |> 
-  unique() |> 
-  length()
+  mutate(time = dmy(WT_WORK_DATE),
+         month = month(time),
+         year = year(time),
+         yrm = paste0(year, "-", month)) |> 
+  select(yrm, propertyID) |> 
+  distinct() |> 
+  group_by(yrm) |>
+  count() |> 
+  ungroup() |> 
+  mutate(yrm2 = ym(yrm),
+         subset = "Farm Bill properties")
 
-method_loss <- round((n_possible - n_prop_known_method) / n_possible * 100, 2)
-method_loss_fb <- round((n_farm2 - n_prop_known_method_fb) / n_farm2 * 100, 2)
-
-
-
-
+bind_rows(df1, df2) |> 
+  ggplot() +
+  aes(x = yrm2, y = n) +
+  geom_point() +
+  labs(x = "Date", 
+       y = "Number of propeties") +
+  facet_wrap(~ subset) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.6)) +
+  my_theme()
 ```
 
+Across the entire time series, the general trend is an increase in the number of removal events through time, and this is largely driven by the fast increase in the number of events recorded in Farm Bill properties.
 
 
-In the MIS data, there are `r n_methods` unique methods of pig harvesting recorded. However, we are only interested in records that can be classified as on of these five: 
-
-1. firearms (e.g. hunting)
-2. fixed wing aircraft
-3. helicopters
-4. snares
-5. traps 
-
-These method classes were chosen because their effort (how many units deployed for how many hours) can be easily standardized, which is required for density estimation. Therefore, we only use records that have a method recorded that can be matched to one of the five listed above. This winnows that data to `r n_prop_known_method` properties, which includes `r n_prop_known_method_fb` Farm Bill properties.
-
-- Subsetting that data to these five methods causes a loss of `r method_loss`% of total properties, and a loss of `r method_loss_fb`% of Farm Bill properties
-
-Then, for each method, there are a series of checks to determine whether or not a pig removal event should be kept, altered, or removed:
-
-- For traps and snares, removal events were dropped if we could not determine ff the trap/snare was checked or reset.
-
-- For traps and snares, events lasting longer than 90 trap nights were broken in to smaller events because it is unlikely that traps and snares were not reset during this time. After breaking up these events we checked again for traps/snares being left open or not reset.
-
-- For all records, effort data that was recorded as 0 or was missing was discarded. This includes method, number of units deployed, or search time.
-
-  - Absolute search times that were obviously too long (i.e. weeks) were treated as a data entry error and discarded.  
-
-
-  
 {{< pagebreak >}}
 
 ```{r}
@@ -833,68 +664,15 @@ low_states <- with_fb |>
 
 The following states had less than `r thresh` properties and were left off the graph for visualization purposes: `r low_states`
 
-### Processed data to model data
+### Processed Data
 
-
-```{r}
-#| label: process model data
-#| results: hide
-
-
-
-
-observed_pp <- data_pp |>
-    select(propertyID, primary_period) |>
-    distinct() |>
-    count(propertyID) |>
-    rename(n_observed_pp = n)
-
-ts_length <- get_ts_length(data_pp) |>
-  rename(ts_length = delta) |>
-  select(-primary_period)
-
-best_properties <- data_pp |>
-  group_by(propertyID, property_area_km2) |>
-  summarise(take = sum(take),
-            effort = sum(effort_per),
-            unit_count = sum(trap_count),
-            n_total_events = n()) |>
-  ungroup() |>
-  left_join(ts_length) |>
-  left_join(observed_pp) |>
-  mutate(prop_observed = n_observed_pp / ts_length) |>
-  filter(property_area_km2 >= area_min, property_area_km2 <= area_max,
-         take >= take_min, take <= take_max,
-         n_total_events >= n_total_events_min, n_total_events <= n_total_events_max,
-         n_observed_pp >= n_observed_pp_min, n_observed_pp <= n_observed_pp_max,
-         ts_length >= ts_length_min, ts_length <= ts_length_max,
-         prop_observed >= prop_obs_min)
-
-n_best <- nrow(best_properties)
-
-# farm_bill_properties <- farm_bill_properties |> 
-#   rename(alws_agrprop_id = ALWS_AGRPROP_ID)
-
-data_for_join <- data_pp |> 
-  select(propertyID, agrp_prp_id, alws_agrprop_id) |> 
-  unique() |> 
-  left_join(farm_bill_properties)
-
-n_best_fb <- left_join(best_properties, data_for_join) |> 
-  filter(farm_bill == 1) |> 
-  nrow()
-
-```
-
-
-
-If we apply the property characteristics from @tbl-confidentProperties to the final processed data, we are left with `r n_best` properties that we are confident in estimating their density, of which `r n_best_fb` are Farm Bill properties.
 
 Below are the same figures from above (the raw MIS data), but now using the data suitable for modeling (the `r n_final_props` data set). 
 
 ```{r}
 #| label: fig-eventsPerPropertyFinal
 #| fig-cap: "The distribution of removal events in each property in the final data"
+
 df_events <- data_pp |>
   count(agrp_prp_id) |> 
   mutate(subset = "All properties")
@@ -1042,4 +820,41 @@ bind_rows(df1, df2) |>
   my_theme()
 ```
 
+{{< pagebreak >}}
 
+```{r}
+#| label: fig-timeseriesPropetiesFinal
+#| fig-cap: "The total number of properties that recorded removal events in each calendar month in the final data set."
+
+df1 <- df_with_dates |> 
+  mutate(yrm = paste0(year, "-", month)) |> 
+  select(yrm, propertyID) |> 
+  distinct() |> 
+  group_by(yrm) |>
+  count() |> 
+  ungroup() |> 
+  mutate(yrm2 = ym(yrm),
+         subset = "All properties")
+
+df2 <- df_with_dates |> 
+  filter(farm_bill == 1) |> 
+  mutate(yrm = paste0(year, "-", month)) |> 
+  select(yrm, propertyID) |> 
+  distinct() |> 
+  group_by(yrm) |>
+  count() |> 
+  ungroup() |> 
+  mutate(yrm2 = ym(yrm),
+         subset = "Farm Bill properties")
+
+bind_rows(df1, df2) |> 
+  ggplot() +
+  aes(x = yrm2, y = n) +
+  geom_point() +
+  labs(x = "Date", 
+       y = "Number of propeties") +
+  facet_wrap(~ subset) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.6)) +
+  my_theme()
+```
